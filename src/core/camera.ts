@@ -23,6 +23,9 @@ export class Camera {
   private lastMouseX = 0;
   private lastMouseY = 0;
 
+  // Hover target for zoom centering (set externally when hovering over a body)
+  private hoverTargetWorld: { x: number; y: number } | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.resize(canvas);
     this.setupControls(canvas);
@@ -101,14 +104,21 @@ export class Camera {
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
 
-      // Remember the world point under cursor as our zoom anchor
       const mouseX = e.offsetX;
       const mouseY = e.offsetY;
-      zoomAnchorScreen = { x: mouseX, y: mouseY };
-      zoomAnchorWorld = {
-        x: (mouseX - this.width / 2) / this._zoom + this.x,
-        y: (mouseY - this.height / 2) / this._zoom + this.y
-      };
+
+      // Use hover target (body position) if available, otherwise cursor position
+      if (this.hoverTargetWorld) {
+        zoomAnchorWorld = this.hoverTargetWorld;
+        // Calculate where this world point currently appears on screen
+        zoomAnchorScreen = this.worldToScreen(this.hoverTargetWorld.x, this.hoverTargetWorld.y);
+      } else {
+        zoomAnchorScreen = { x: mouseX, y: mouseY };
+        zoomAnchorWorld = {
+          x: (mouseX - this.width / 2) / this._zoom + this.x,
+          y: (mouseY - this.height / 2) / this._zoom + this.y
+        };
+      }
 
       // Normalize scroll delta across browsers/devices
       const delta = -e.deltaY * 0.0035;
@@ -151,5 +161,10 @@ export class Camera {
   // Get current visible range in AU (for debugging/display)
   getVisibleRangeAU(): number {
     return (this.width / this._zoom) / AU_KM;
+  }
+
+  // Set hover target for zoom centering (call with body position when hovering)
+  setHoverTarget(worldPos: { x: number; y: number } | null): void {
+    this.hoverTargetWorld = worldPos;
   }
 }

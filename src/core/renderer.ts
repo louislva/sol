@@ -20,12 +20,35 @@ export class Renderer {
   // Body lookup map for parent occlusion checks
   private bodyMap: Map<string, CelestialBody> = new Map();
 
+  // Currently hovered body name
+  private hoveredBodyName: string | null = null;
+
   private readonly bgColor = '#000000';
   private readonly labelColor = '#cccccc';
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.ctx = canvas.getContext('2d')!;
     this.camera = camera;
+  }
+
+  setHoveredBody(name: string | null): void {
+    this.hoveredBodyName = name;
+  }
+
+  // Brighten a hex color for hover effect
+  private brightenColor(hex: string): string {
+    // Parse hex
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+
+    // Brighten by blending toward white
+    const factor = 0.4;
+    const nr = Math.round(r + (255 - r) * factor);
+    const ng = Math.round(g + (255 - g) * factor);
+    const nb = Math.round(b + (255 - b) * factor);
+
+    return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
   }
 
   // Check visibility of a body relative to its parent's minimum display size
@@ -135,14 +158,18 @@ export class Renderer {
     // Apply occlusion opacity
     this.ctx.globalAlpha = occlusionOpacity;
 
+    // Check if this body is hovered
+    const isHovered = body.name === this.hoveredBodyName;
+    const displayColor = isHovered ? this.brightenColor(body.color) : body.color;
+
     // Draw probe/satellite with special icon
     if (body.type === 'probe') {
-      this.renderProbeIcon(screenPos.x, screenPos.y, radiusPixels, body.color);
+      this.renderProbeIcon(screenPos.x, screenPos.y, radiusPixels, displayColor);
     } else {
       // Draw the body as circle
       this.ctx.beginPath();
       this.ctx.arc(screenPos.x, screenPos.y, radiusPixels, 0, Math.PI * 2);
-      this.ctx.fillStyle = body.color;
+      this.ctx.fillStyle = displayColor;
       this.ctx.fill();
 
       // Add a subtle stroke for definition
@@ -256,11 +283,10 @@ export class Renderer {
   // Draw probe/satellite icon: white cylinder with 4 solar panels
   //   [■] [▬] [■]
   //   [■] [▬] [■]
-  private renderProbeIcon(x: number, y: number, size: number, _color: string): void {
+  private renderProbeIcon(x: number, y: number, size: number, color: string): void {
     const s = Math.max(size, 2);
 
-    // All white
-    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillStyle = color;
 
     // Body (cylinder = rectangle)
     const bodyW = s * 0.5;
