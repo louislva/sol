@@ -6,9 +6,9 @@ export class Camera {
   y: number = 0;
 
   // Zoom level: pixels per kilometer
-  // Start zoomed out to see inner solar system (~5 AU visible)
-  private _zoom: number = 0.0000001; // Very zoomed out initially
-  private _targetZoom: number = 0.0000001;
+  // Start zoomed out to see inner solar system (100x wider view)
+  private _zoom: number = 0.000000001; // Very zoomed out initially
+  private _targetZoom: number = 0.000000001;
 
   // Canvas dimensions
   width: number = 0;

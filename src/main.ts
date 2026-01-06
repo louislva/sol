@@ -26,10 +26,10 @@ if (earth) {
   const earthPos = getBodyPosition(earth, time.currentJulian);
   camera.x = earthPos.x;
   camera.y = earthPos.y;
-  // Set zoom to show Earth at ~40px radius (5x wider view for full satellite system)
-  // Earth radius is ~6371 km, so zoom = 40px / 6371km ≈ 0.006
-  camera['_zoom'] = 0.006;
-  camera['_targetZoom'] = 0.006;
+  // Set zoom to show Earth at medium view (10x wider than original)
+  // Earth radius is ~6371 km, so zoom = 4px / 6371km ≈ 0.0006
+  camera['_zoom'] = 0.0006;
+  camera['_targetZoom'] = 0.0006;
 }
 
 // Current moon filter level
