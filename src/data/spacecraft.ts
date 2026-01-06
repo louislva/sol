@@ -14,6 +14,7 @@ import {
   type SpacecraftIconType,
   SPACECRAFT_STATUS_COLORS,
 } from '../astronomy/constants';
+import spacecraftJsonData from './spacecraft.json';
 
 // JSON data structure (matches fetch-spacecraft.ts output)
 interface SpacecraftJsonData {
@@ -112,28 +113,12 @@ function spacecraftToCelestialBody(
  */
 export async function loadSpacecraftData(): Promise<void> {
   try {
-    // Fetch the JSON file at runtime (works with Vite)
-    const response = await fetch('/src/data/spacecraft.json');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    spacecraftData = await response.json();
+    // Use statically imported JSON data (bundled by Vite)
+    spacecraftData = spacecraftJsonData as SpacecraftJsonData;
     allSpacecraftCache = null; // Reset cache
     console.log(`Loaded ${spacecraftData?.spacecraft.length || 0} spacecraft from spacecraft.json`);
   } catch (err) {
-    // Try alternative path for production build
-    try {
-      const response = await fetch('/data/spacecraft.json');
-      if (response.ok) {
-        spacecraftData = await response.json();
-        allSpacecraftCache = null;
-        console.log(`Loaded ${spacecraftData?.spacecraft.length || 0} spacecraft from spacecraft.json`);
-        return;
-      }
-    } catch {
-      // Ignore
-    }
-    console.log('spacecraft.json not found. Run: npx ts-node scripts/fetch-spacecraft.ts');
+    console.log('spacecraft.json not found. Run: npx tsx scripts/fetch-spacecraft.ts');
     spacecraftData = null;
   }
 }

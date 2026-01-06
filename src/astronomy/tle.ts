@@ -172,7 +172,7 @@ export function parseTLEText(text: string): TLEData[] {
 // Convert SatelliteElements to CelestialBody format
 export function satelliteToCelestialBody(sat: SatelliteElements): {
   name: string;
-  type: 'moon';  // Using 'moon' type for parent-centric rendering
+  type: 'satellite';
   radius: number;
   color: string;
   parentName: string;
@@ -197,7 +197,7 @@ export function satelliteToCelestialBody(sat: SatelliteElements): {
 
   return {
     name: sat.name,
-    type: 'moon',  // Parent-centric type
+    type: 'satellite',
     radius: 0.01,  // Very small, will use minimum display size
     color: categoryColors[sat.category || 'OTHER'] || '#ffffff',
     parentName: 'Earth',

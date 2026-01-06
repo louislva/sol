@@ -2,11 +2,12 @@ import './style.css';
 import { Camera } from './core/camera';
 import { Renderer } from './core/renderer';
 import { TimeSystem, type SpeedMode } from './core/time';
-import { allBodies, type CelestialBody, getBodyPosition } from './astronomy/bodies';
+import { allBodies, type CelestialBody, getBodyPosition, getOrbitPath } from './astronomy/bodies';
 import { filterMoons } from './data/moons';
 import { allProbes } from './data/probes';
 import { allComets } from './data/comets';
 import { loadSpacecraftData, getVisibleSpacecraft, hasSpacecraftData } from './data/spacecraft';
+import { allSatellites } from './data/satellites';
 import { AsteroidBelt, generateSampleAsteroids } from './astronomy/asteroidBelt';
 import { MIN_DISPLAY_SIZE, type MoonCategory } from './astronomy/constants';
 import * as sidebar from './ui/sidebar';
@@ -19,8 +20,36 @@ const camera = new Camera(canvas);
 const renderer = new Renderer(canvas, camera);
 const time = new TimeSystem();
 
+// Set initial view to Earth at LEO distance
+const earth = allBodies.find(b => b.name === 'Earth');
+if (earth) {
+  const earthPos = getBodyPosition(earth, time.currentJulian);
+  camera.x = earthPos.x;
+  camera.y = earthPos.y;
+  // Set zoom to show Earth at ~200px radius (good for seeing satellite system)
+  // Earth radius is ~6371 km, so zoom = 200px / 6371km ≈ 0.031
+  camera['_zoom'] = 0.03;
+  camera['_targetZoom'] = 0.03;
+}
+
 // Current moon filter level
 let currentMoonFilter: MoonCategory = 'medium';
+
+// Threshold for showing satellites (Earth radius in pixels)
+const SATELLITE_VISIBILITY_THRESHOLD = 30; // Show satellites when Earth > 30px radius
+
+// Check if we should show satellites based on zoom level
+function shouldShowSatellites(): boolean {
+  // Find Earth in the bodies array
+  const earth = allBodies.find(b => b.name === 'Earth');
+  if (!earth) return false;
+
+  // Calculate Earth's display size
+  const earthRadiusPixels = camera.kmToPixels(earth.radius);
+
+  // Show satellites when Earth is large enough on screen
+  return earthRadiusPixels > SATELLITE_VISIBILITY_THRESHOLD;
+}
 
 // Build bodies array based on current moon filter and time
 function buildBodies(julianDate?: number): CelestialBody[] {
@@ -37,6 +66,11 @@ function buildBodies(julianDate?: number): CelestialBody[] {
   } else {
     // Fallback to legacy manual probes if JPL data not loaded
     bodies.push(...allProbes);
+  }
+
+  // Add satellites with LOD - only when zoomed in on Earth
+  if (shouldShowSatellites()) {
+    bodies.push(...allSatellites);
   }
 
   return bodies;
@@ -158,6 +192,29 @@ sidebar.setOnClose(() => {
   renderer.setSelectedBody(null);
 });
 
+// Calculate distance from point to line segment
+function pointToSegmentDistance(
+  px: number, py: number,
+  x1: number, y1: number,
+  x2: number, y2: number
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSq = dx * dx + dy * dy;
+
+  if (lengthSq === 0) {
+    // Segment is a point
+    return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+  }
+
+  // Project point onto line, clamped to segment
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSq));
+  const projX = x1 + t * dx;
+  const projY = y1 + t * dy;
+
+  return Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
+}
+
 // Check if a body is occluded by its parent (hidden inside parent's display radius)
 function isOccludedByParent(body: CelestialBody, julianDate: number, bodyMap: Map<string, CelestialBody>): boolean {
   if (body.type === 'star' || body.fixedPosition) return false;
@@ -194,6 +251,7 @@ function getHoveredBody(julianDate: number): CelestialBody | null {
   // Build body map for parent lookup
   const bodyMap = new Map(bodies.map(b => [b.name, b]));
 
+  // First pass: check direct body hits (higher priority)
   for (const body of bodies) {
     // Skip bodies that are occluded by their parent
     if (isOccludedByParent(body, julianDate, bodyMap)) {
@@ -220,12 +278,51 @@ function getHoveredBody(julianDate: number): CelestialBody | null {
     }
   }
 
-  return closest;
+  // If we found a direct body hit, return it
+  if (closest) {
+    return closest;
+  }
+
+  // Second pass: check orbit hits
+  const ORBIT_HIT_THRESHOLD = 8; // pixels
+  let closestOrbitBody: CelestialBody | null = null;
+  let closestOrbitDist = Infinity;
+
+  for (const body of bodies) {
+    // Skip stars (no orbit) and occluded bodies
+    if (body.type === 'star' || body.fixedPosition) continue;
+    if (isOccludedByParent(body, julianDate, bodyMap)) continue;
+
+    // Get orbit path (use fewer points for performance)
+    const orbitPath = getOrbitPath(body, julianDate, 60);
+    if (orbitPath.length < 2) continue;
+
+    // Check distance to each orbit segment
+    for (let i = 0; i < orbitPath.length; i++) {
+      const p1 = orbitPath[i];
+      const p2 = orbitPath[(i + 1) % orbitPath.length];
+
+      const screen1 = camera.worldToScreen(p1.x, p1.y);
+      const screen2 = camera.worldToScreen(p2.x, p2.y);
+
+      const dist = pointToSegmentDistance(mouseX, mouseY, screen1.x, screen1.y, screen2.x, screen2.y);
+
+      if (dist <= ORBIT_HIT_THRESHOLD && dist < closestOrbitDist) {
+        closestOrbitBody = body;
+        closestOrbitDist = dist;
+      }
+    }
+  }
+
+  return closestOrbitBody;
 }
 
 // Track last time we rebuilt bodies for timeline filtering
 let lastBodiesRebuildJD = 0;
 const BODIES_REBUILD_INTERVAL = 1; // Rebuild every ~1 Julian day
+
+// Track satellite visibility state to detect LOD changes
+let lastSatelliteVisibility = shouldShowSatellites();
 
 // Main render loop
 function animate(): void {
@@ -236,6 +333,16 @@ function animate(): void {
 
   // Update time
   time.update();
+
+  // Check if satellite visibility changed (LOD threshold crossed)
+  const currentSatelliteVisibility = shouldShowSatellites();
+  const satelliteVisibilityChanged = currentSatelliteVisibility !== lastSatelliteVisibility;
+
+  if (satelliteVisibilityChanged) {
+    bodies = buildBodies(time.currentJulian);
+    lastSatelliteVisibility = currentSatelliteVisibility;
+    console.log(`Satellites ${currentSatelliteVisibility ? 'shown' : 'hidden'} (${allSatellites.length} satellites)`);
+  }
 
   // Rebuild bodies periodically for spacecraft timeline filtering
   if (hasSpacecraftData() && Math.abs(time.currentJulian - lastBodiesRebuildJD) > BODIES_REBUILD_INTERVAL) {

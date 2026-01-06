@@ -55,6 +55,8 @@ src/
 │   ├── probes.ts           # Space probes with segmented orbits (legacy)
 │   ├── spacecraft.json     # Spacecraft data from JPL Horizons (29+ missions)
 │   ├── spacecraft.ts       # Spacecraft loader with timeline filtering
+│   ├── satellites.json     # Earth satellite TLE data from CelesTrak (64 satellites)
+│   ├── satellites.ts       # Satellite data loader and filtering
 │   └── comets.ts           # Comet orbital data
 scripts/
 ├── fetch-moons.ts          # Download moon data from JPL Horizons
@@ -94,6 +96,12 @@ segments: [
 - **Medium zoom**: ~500 sampled asteroids
 - **Zoomed in**: Up to 2000 asteroids in viewport
 
+### Satellite LOD
+- **Zoomed out**: Satellites hidden for performance
+- **Zoomed to Earth (>30px Earth radius)**: 64 satellites visible (LEO, MEO, GEO)
+- Satellites use TLE (Two-Line Element) orbital data from CelesTrak
+- Categories: LEO (red), MEO (blue), GEO (green)
+
 ### Parent Occlusion
 Bodies fade out when visually inside their parent's minimum display size.
 Labels fade earlier (32-64px from parent edge).
@@ -110,9 +118,9 @@ Labels fade earlier (32-64px from parent edge).
 - [x] Custom spacecraft icons (probe, telescope, orbiter, rover)
 - [x] Timeline filtering (spacecraft appear/disappear based on mission dates)
 - [x] Data fetch scripts for asteroids, satellites, and spacecraft
+- [x] Earth satellites (64 satellites: LEO, MEO, GEO) with LOD visibility
 
 ## Future Features
-- [ ] Earth satellites (LEO, GEO) visible when zoomed to Earth
 - [ ] Click for object info popups
 - [ ] Search & highlight
 - [ ] Reverse time

@@ -26,7 +26,7 @@ export function rad2deg(rad: number): number {
 }
 
 // Body type for rendering
-export type BodyType = 'star' | 'planet' | 'dwarf' | 'moon' | 'asteroid' | 'comet' | 'probe';
+export type BodyType = 'star' | 'planet' | 'dwarf' | 'moon' | 'asteroid' | 'comet' | 'probe' | 'satellite';
 
 // Spacecraft-specific types
 export type SpacecraftType = 'deep_space' | 'earth_orbiter' | 'planetary_orbiter' | 'lander';
@@ -49,6 +49,7 @@ export const MIN_DISPLAY_SIZE: Record<BodyType, number> = {
   asteroid: 2,
   comet: 2,
   probe: 8,
+  satellite: 2,
 };
 
 // Simple colors on black
@@ -60,6 +61,7 @@ export const BODY_COLORS: Record<BodyType, string> = {
   asteroid: '#666666',
   comet: '#66ccff',
   probe: '#ff6666',
+  satellite: '#ffffff', // Default white, but satellites have custom colors by category
 };
 
 // Simple planet colors
