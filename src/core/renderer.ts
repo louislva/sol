@@ -221,66 +221,37 @@ export class Renderer {
     this.ctx.globalAlpha = 1;
   }
 
-  // Draw probe/satellite icon: cylinder body with solar panels
-  //   [■]─[▬▬]─[■]
-  //   [■]─[▬▬]─[■]
-  private renderProbeIcon(x: number, y: number, size: number, color: string): void {
-    // Scale based on size (minimum 2px)
+  // Draw probe/satellite icon: white cylinder with 4 solar panels
+  //   [■] [▬] [■]
+  //   [■] [▬] [■]
+  private renderProbeIcon(x: number, y: number, size: number, _color: string): void {
     const s = Math.max(size, 2);
 
-    // Body dimensions
-    const bodyW = s * 0.8;
-    const bodyH = s * 1.2;
+    // All white
+    this.ctx.fillStyle = '#ffffff';
 
-    // Solar panel dimensions
-    const panelW = s * 0.5;
-    const panelH = s * 0.3;
-    const panelGap = s * 0.15;  // Gap between panels
-    const armLen = s * 0.3;
+    // Body (cylinder = rectangle)
+    const bodyW = s * 0.5;
+    const bodyH = s * 1.4;
+    this.ctx.fillRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH);
 
-    // Draw body (rounded rectangle / cylinder)
-    this.ctx.fillStyle = color;
-    this.ctx.beginPath();
-    this.ctx.roundRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH, s * 0.15);
-    this.ctx.fill();
+    // Solar panels
+    const panelW = s * 0.6;
+    const panelH = s * 0.35;
+    const panelGap = s * 0.2;
+    const panelX = s * 0.9;  // Distance from center to panel
 
-    // Solar panel color (darker blue)
-    const panelColor = '#3366aa';
+    // Left panels
+    this.ctx.fillRect(x - panelX - panelW / 2, y - panelGap / 2 - panelH, panelW, panelH);
+    this.ctx.fillRect(x - panelX - panelW / 2, y + panelGap / 2, panelW, panelH);
 
-    // Left solar panels (two separate panels)
-    const leftX = x - bodyW / 2 - armLen - panelW;
+    // Right panels
+    this.ctx.fillRect(x + panelX - panelW / 2, y - panelGap / 2 - panelH, panelW, panelH);
+    this.ctx.fillRect(x + panelX - panelW / 2, y + panelGap / 2, panelW, panelH);
 
-    // Left arm
-    this.ctx.fillStyle = '#888888';
-    this.ctx.fillRect(x - bodyW / 2 - armLen, y - 0.5, armLen, 1);
-
-    // Left top panel
-    this.ctx.fillStyle = panelColor;
-    this.ctx.fillRect(leftX, y - panelH - panelGap / 2, panelW, panelH);
-
-    // Left bottom panel
-    this.ctx.fillRect(leftX, y + panelGap / 2, panelW, panelH);
-
-    // Right solar panels (two separate panels)
-    const rightX = x + bodyW / 2 + armLen;
-
-    // Right arm
-    this.ctx.fillStyle = '#888888';
-    this.ctx.fillRect(x + bodyW / 2, y - 0.5, armLen, 1);
-
-    // Right top panel
-    this.ctx.fillStyle = panelColor;
-    this.ctx.fillRect(rightX, y - panelH - panelGap / 2, panelW, panelH);
-
-    // Right bottom panel
-    this.ctx.fillRect(rightX, y + panelGap / 2, panelW, panelH);
-
-    // Add subtle highlight to body
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    this.ctx.lineWidth = 0.5;
-    this.ctx.beginPath();
-    this.ctx.roundRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH, s * 0.15);
-    this.ctx.stroke();
+    // Arms (thin lines connecting body to panels)
+    this.ctx.fillRect(x - panelX + panelW / 2, y - 0.5, panelX - panelW / 2 - bodyW / 2, 1);
+    this.ctx.fillRect(x + bodyW / 2, y - 0.5, panelX - panelW / 2 - bodyW / 2, 1);
   }
 
   renderAll(bodies: CelestialBody[], julianDate: number): void {
