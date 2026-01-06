@@ -2,9 +2,19 @@ import { Camera } from './camera';
 import { type CelestialBody, getBodyPosition, getOrbitPath } from '../astronomy/bodies';
 import { MIN_DISPLAY_SIZE } from '../astronomy/constants';
 
+// Cached orbit data
+interface OrbitCache {
+  points: Array<{ x: number; y: number }>;
+  julianDate: number;
+}
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private camera: Camera;
+
+  // Orbit path cache - recalculate only occasionally
+  private orbitCache: Map<string, OrbitCache> = new Map();
+  private readonly CACHE_DURATION = 1; // Recalculate every ~1 Julian day
 
   // Parchment colors
   private readonly bgColor = '#f4e4c1';
@@ -65,28 +75,73 @@ export class Renderer {
     }
   }
 
+  private getOrbitPoints(body: CelestialBody, julianDate: number): Array<{ x: number; y: number }> {
+    const cached = this.orbitCache.get(body.name);
+
+    // Use cache if fresh enough
+    if (cached && Math.abs(cached.julianDate - julianDate) < this.CACHE_DURATION) {
+      return cached.points;
+    }
+
+    // Recalculate and cache
+    const points = getOrbitPath(body, julianDate, 180);
+    this.orbitCache.set(body.name, { points, julianDate });
+    return points;
+  }
+
   renderOrbit(body: CelestialBody, julianDate: number): void {
     if (body.type === 'star') return;
 
-    const orbitPoints = getOrbitPath(body, julianDate, 180);
+    const orbitPoints = this.getOrbitPoints(body, julianDate);
     if (orbitPoints.length < 2) return;
 
+    // Quick bounds check - skip if entire orbit is off screen
+    const screenPoints: Array<{ x: number; y: number; visible: boolean }> = [];
+    let anyVisible = false;
+
+    for (const point of orbitPoints) {
+      const screen = this.camera.worldToScreen(point.x, point.y);
+      const visible =
+        screen.x >= -1000 && screen.x <= this.camera.width + 1000 &&
+        screen.y >= -1000 && screen.y <= this.camera.height + 1000;
+      screenPoints.push({ ...screen, visible });
+      if (visible) anyVisible = true;
+    }
+
+    // Skip entirely if nothing visible
+    if (!anyVisible) return;
+
+    // Draw the orbit, but only move/line to visible segments
     this.ctx.beginPath();
     this.ctx.strokeStyle = this.orbitColor;
     this.ctx.lineWidth = 1;
     this.ctx.setLineDash([4, 4]);
 
-    const firstPoint = this.camera.worldToScreen(orbitPoints[0].x, orbitPoints[0].y);
-    this.ctx.moveTo(firstPoint.x, firstPoint.y);
+    let needsMove = true;
+    for (let i = 0; i < screenPoints.length; i++) {
+      const point = screenPoints[i];
+      const prevVisible = i > 0 && screenPoints[i - 1].visible;
+      const nextVisible = i < screenPoints.length - 1 && screenPoints[i + 1].visible;
 
-    for (let i = 1; i < orbitPoints.length; i++) {
-      const point = this.camera.worldToScreen(orbitPoints[i].x, orbitPoints[i].y);
-      this.ctx.lineTo(point.x, point.y);
+      // Draw this point if it's visible or adjacent to a visible point
+      if (point.visible || prevVisible || nextVisible) {
+        if (needsMove) {
+          this.ctx.moveTo(point.x, point.y);
+          needsMove = false;
+        } else {
+          this.ctx.lineTo(point.x, point.y);
+        }
+      } else {
+        needsMove = true;
+      }
     }
 
     // Close the orbit for elliptical paths
-    if (body.elements && body.elements.e < 1) {
-      this.ctx.closePath();
+    if (body.elements && body.elements.e < 1 && !needsMove) {
+      const first = screenPoints[0];
+      if (first.visible || screenPoints[screenPoints.length - 1].visible) {
+        this.ctx.lineTo(first.x, first.y);
+      }
     }
 
     this.ctx.stroke();
