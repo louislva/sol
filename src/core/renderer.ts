@@ -104,17 +104,22 @@ export class Renderer {
     // Apply occlusion opacity
     this.ctx.globalAlpha = occlusionOpacity;
 
-    // Draw the body
-    this.ctx.beginPath();
-    this.ctx.arc(screenPos.x, screenPos.y, radiusPixels, 0, Math.PI * 2);
-    this.ctx.fillStyle = body.color;
-    this.ctx.fill();
+    // Draw probe/satellite with special icon
+    if (body.type === 'probe') {
+      this.renderProbeIcon(screenPos.x, screenPos.y, radiusPixels, body.color);
+    } else {
+      // Draw the body as circle
+      this.ctx.beginPath();
+      this.ctx.arc(screenPos.x, screenPos.y, radiusPixels, 0, Math.PI * 2);
+      this.ctx.fillStyle = body.color;
+      this.ctx.fill();
 
-    // Add a subtle stroke for definition
-    if (body.type !== 'star') {
-      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-      this.ctx.lineWidth = 0.5;
-      this.ctx.stroke();
+      // Add a subtle stroke for definition
+      if (body.type !== 'star') {
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        this.ctx.lineWidth = 0.5;
+        this.ctx.stroke();
+      }
     }
 
     // Reset alpha
@@ -214,6 +219,68 @@ export class Renderer {
     this.ctx.globalAlpha = 0.7 * opacity;
     this.ctx.fillText(text, x, y);
     this.ctx.globalAlpha = 1;
+  }
+
+  // Draw probe/satellite icon: cylinder body with solar panels
+  //   [■]─[▬▬]─[■]
+  //   [■]─[▬▬]─[■]
+  private renderProbeIcon(x: number, y: number, size: number, color: string): void {
+    // Scale based on size (minimum 2px)
+    const s = Math.max(size, 2);
+
+    // Body dimensions
+    const bodyW = s * 0.8;
+    const bodyH = s * 1.2;
+
+    // Solar panel dimensions
+    const panelW = s * 0.5;
+    const panelH = s * 0.3;
+    const panelGap = s * 0.15;  // Gap between panels
+    const armLen = s * 0.3;
+
+    // Draw body (rounded rectangle / cylinder)
+    this.ctx.fillStyle = color;
+    this.ctx.beginPath();
+    this.ctx.roundRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH, s * 0.15);
+    this.ctx.fill();
+
+    // Solar panel color (darker blue)
+    const panelColor = '#3366aa';
+
+    // Left solar panels (two separate panels)
+    const leftX = x - bodyW / 2 - armLen - panelW;
+
+    // Left arm
+    this.ctx.fillStyle = '#888888';
+    this.ctx.fillRect(x - bodyW / 2 - armLen, y - 0.5, armLen, 1);
+
+    // Left top panel
+    this.ctx.fillStyle = panelColor;
+    this.ctx.fillRect(leftX, y - panelH - panelGap / 2, panelW, panelH);
+
+    // Left bottom panel
+    this.ctx.fillRect(leftX, y + panelGap / 2, panelW, panelH);
+
+    // Right solar panels (two separate panels)
+    const rightX = x + bodyW / 2 + armLen;
+
+    // Right arm
+    this.ctx.fillStyle = '#888888';
+    this.ctx.fillRect(x + bodyW / 2, y - 0.5, armLen, 1);
+
+    // Right top panel
+    this.ctx.fillStyle = panelColor;
+    this.ctx.fillRect(rightX, y - panelH - panelGap / 2, panelW, panelH);
+
+    // Right bottom panel
+    this.ctx.fillRect(rightX, y + panelGap / 2, panelW, panelH);
+
+    // Add subtle highlight to body
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    this.ctx.lineWidth = 0.5;
+    this.ctx.beginPath();
+    this.ctx.roundRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH, s * 0.15);
+    this.ctx.stroke();
   }
 
   renderAll(bodies: CelestialBody[], julianDate: number): void {
