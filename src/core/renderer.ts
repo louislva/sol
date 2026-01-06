@@ -1,6 +1,7 @@
 import { Camera } from './camera';
-import { type CelestialBody, getBodyPosition, getOrbitPath } from '../astronomy/bodies';
+import { type CelestialBody, getBodyPosition, getOrbitPath, setBodyMap } from '../astronomy/bodies';
 import { MIN_DISPLAY_SIZE } from '../astronomy/constants';
+import { AsteroidBelt } from '../astronomy/asteroidBelt';
 
 // Cached orbit data
 interface OrbitCache {
@@ -194,7 +195,8 @@ export class Renderer {
     }
 
     // Close the orbit for elliptical paths
-    if (body.elements && body.elements.e < 1 && !needsMove) {
+    const eccentricity = body.elements?.e ?? body.parentCentricElements?.e ?? 1;
+    if (eccentricity < 1 && !needsMove) {
       const first = screenPoints[0];
       if (first.visible || screenPoints[screenPoints.length - 1].visible) {
         this.ctx.lineTo(first.x, first.y);
@@ -223,6 +225,9 @@ export class Renderer {
       this.bodyMap.set(body.name, body);
     }
 
+    // Set global body map for hierarchical position calculations
+    setBodyMap(bodies);
+
     // Draw orbits first (behind bodies)
     for (const body of bodies) {
       this.renderOrbit(body, julianDate);
@@ -232,5 +237,73 @@ export class Renderer {
     for (const body of bodies) {
       this.renderBody(body, julianDate);
     }
+  }
+
+  // Render asteroid belt with LOD
+  renderAsteroids(asteroidBelt: AsteroidBelt, julianDate: number): void {
+    // Render belt ring when zoomed out
+    if (asteroidBelt.shouldRenderBeltRing(this.camera)) {
+      this.renderAsteroidBeltRing(asteroidBelt);
+    }
+
+    // Render individual asteroids based on zoom level
+    const asteroids = asteroidBelt.getVisibleAsteroids(this.camera, julianDate);
+    if (asteroids.length === 0) return;
+
+    // Batch render all asteroids as small dots
+    this.ctx.fillStyle = asteroidBelt.color;
+    this.ctx.globalAlpha = 0.6;
+    this.ctx.beginPath();
+
+    for (const pos of asteroids) {
+      const screen = this.camera.worldToScreen(pos.x, pos.y);
+
+      // Skip if off screen
+      if (
+        screen.x < -10 ||
+        screen.x > this.camera.width + 10 ||
+        screen.y < -10 ||
+        screen.y > this.camera.height + 10
+      ) {
+        continue;
+      }
+
+      // Draw as tiny dot (1.5px radius)
+      this.ctx.moveTo(screen.x + 1.5, screen.y);
+      this.ctx.arc(screen.x, screen.y, 1.5, 0, Math.PI * 2);
+    }
+
+    this.ctx.fill();
+    this.ctx.globalAlpha = 1;
+  }
+
+  // Render statistical asteroid belt ring
+  private renderAsteroidBeltRing(asteroidBelt: AsteroidBelt): void {
+    const path = asteroidBelt.getBeltRingPath(this.camera, 120);
+
+    // Draw as a filled ring
+    this.ctx.globalAlpha = 0.15;
+    this.ctx.fillStyle = asteroidBelt.color;
+    this.ctx.beginPath();
+
+    // Outer edge
+    for (let i = 0; i < path.length; i++) {
+      const screen = this.camera.worldToScreen(path[i].outer.x, path[i].outer.y);
+      if (i === 0) {
+        this.ctx.moveTo(screen.x, screen.y);
+      } else {
+        this.ctx.lineTo(screen.x, screen.y);
+      }
+    }
+
+    // Inner edge (reverse direction to create hole)
+    for (let i = path.length - 1; i >= 0; i--) {
+      const screen = this.camera.worldToScreen(path[i].inner.x, path[i].inner.y);
+      this.ctx.lineTo(screen.x, screen.y);
+    }
+
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.globalAlpha = 1;
   }
 }

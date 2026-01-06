@@ -1,6 +1,6 @@
 import { deg2rad, J2000, AU_KM } from './constants';
 
-// Orbital elements for a celestial body
+// Orbital elements for a celestial body (heliocentric, AU-based)
 export interface OrbitalElements {
   a: number;      // Semi-major axis (AU)
   e: number;      // Eccentricity
@@ -16,6 +16,18 @@ export interface OrbitalElements {
   LDot?: number;
   longPeriDot?: number;
   longNodeDot?: number;
+}
+
+// Orbital elements for moons/satellites (parent-centric, km-based)
+export interface ParentCentricElements {
+  a: number;        // Semi-major axis (km)
+  e: number;        // Eccentricity
+  i: number;        // Inclination (degrees)
+  M0: number;       // Mean anomaly at epoch (degrees)
+  omega: number;    // Argument of periapsis (degrees)
+  Omega: number;    // Longitude of ascending node (degrees)
+  n: number;        // Mean motion (degrees per day)
+  epoch: number;    // Epoch as Julian date
 }
 
 // Solve Kepler's equation: M = E - e*sin(E)
@@ -126,6 +138,77 @@ export function calculatePosition(
     x: eclipticPos.x * AU_KM,
     y: eclipticPos.y * AU_KM,
   };
+}
+
+// Calculate position for a moon/satellite relative to its parent (returns km)
+export function calculateParentCentricPosition(
+  elements: ParentCentricElements,
+  julianDate: number
+): { x: number; y: number } {
+  // Days since epoch
+  const dt = julianDate - elements.epoch;
+
+  // Mean anomaly at current time
+  let M = elements.M0 + elements.n * dt;
+
+  // Normalize to 0-360
+  M = ((M % 360) + 360) % 360;
+  M = deg2rad(M);
+
+  // Solve Kepler's equation
+  const E = solveKepler(M, elements.e);
+
+  // Calculate position in orbital plane (km, since a is in km)
+  const orbitalPos = calculateOrbitalPosition(elements.a, elements.e, E);
+
+  // Rotate to reference plane (using omega + Omega for 2D projection)
+  const angle = deg2rad(elements.omega + elements.Omega);
+  const cosAngle = Math.cos(angle);
+  const sinAngle = Math.sin(angle);
+
+  return {
+    x: orbitalPos.x * cosAngle - orbitalPos.y * sinAngle,
+    y: orbitalPos.x * sinAngle + orbitalPos.y * cosAngle,
+  };
+}
+
+// Calculate orbit path for a moon/satellite relative to its parent (returns km)
+export function calculateParentCentricOrbitPath(
+  elements: ParentCentricElements,
+  numPoints: number = 180
+): Array<{ x: number; y: number }> {
+  const points: Array<{ x: number; y: number }> = [];
+
+  // For hyperbolic orbits, only draw the visible portion
+  const maxAngle = elements.e > 1 ? Math.acos(-1 / elements.e) * 0.95 : Math.PI;
+
+  for (let j = 0; j <= numPoints; j++) {
+    // True anomaly from -maxAngle to +maxAngle
+    const nu = (j / numPoints) * 2 * maxAngle - maxAngle;
+
+    // Distance from focus
+    const r = elements.a * (1 - elements.e * elements.e) / (1 + elements.e * Math.cos(nu));
+
+    if (r < 0 || !isFinite(r)) continue;
+
+    // Position in orbital plane (km)
+    const orbitalPos = {
+      x: r * Math.cos(nu),
+      y: r * Math.sin(nu),
+    };
+
+    // Rotate to reference plane
+    const angle = deg2rad(elements.omega + elements.Omega);
+    const cosAngle = Math.cos(angle);
+    const sinAngle = Math.sin(angle);
+
+    points.push({
+      x: orbitalPos.x * cosAngle - orbitalPos.y * sinAngle,
+      y: orbitalPos.x * sinAngle + orbitalPos.y * cosAngle,
+    });
+  }
+
+  return points;
 }
 
 // Calculate orbit path points for rendering
