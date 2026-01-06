@@ -88,8 +88,8 @@ export class Renderer {
     const dy = bodyScreen.y - parentScreen.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    const fadeEnd = parentRadiusPixels + 16;   // Fully hidden at 16px from edge
-    const fadeStart = parentRadiusPixels + 32; // Start fading at 32px from edge
+    const fadeEnd = parentRadiusPixels + 32;   // Fully hidden at 32px from edge
+    const fadeStart = parentRadiusPixels + 64; // Start fading at 64px from edge
 
     if (distance >= fadeStart) return 1;
     if (distance <= fadeEnd) return 0;
