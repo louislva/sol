@@ -8,6 +8,9 @@ Top-down solar system visualization with a dusty parchment/LEMMINO aesthetic. Cl
 - **HTML5 Canvas 2D** - smooth zoom/pan, fits the aesthetic
 - **Keplerian orbital mechanics** - calculate positions from orbital elements
 
+## Development
+- Run `npm run typecheck` to check for TypeScript errors before committing
+
 ## Visual Design
 - Background: `#f4e4c1` (aged parchment)
 - Orbits: `#3d3d3d` with low opacity, thin dashed lines
