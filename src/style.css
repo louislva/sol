@@ -213,3 +213,37 @@ body {
   letter-spacing: 0.15em;
   margin-bottom: 12px;
 }
+
+/* Wikipedia summary */
+.sidebar-wikipedia {
+  margin: 16px 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.sidebar-wikipedia-loading {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.sidebar-wikipedia-content {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.sidebar-wikipedia-link {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-wikipedia-link:hover {
+  opacity: 0.7;
+}

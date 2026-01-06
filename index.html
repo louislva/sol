@@ -8,6 +8,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      /* Critical CSS to prevent FOUC */
+      body { margin: 0; padding: 0; background: #000; font-family: 'Space Mono', monospace; }
+      button { background: transparent; border: none; color: #888; font-family: inherit; font-size: 12px; padding: 8px 14px; cursor: pointer; }
+      #ui { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); }
+      #sidebar { position: fixed; top: 0; right: 0; }
+      #sidebar.hidden { display: none; }
+    </style>
   </head>
   <body>
     <canvas id="canvas"></canvas>

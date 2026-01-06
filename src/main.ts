@@ -26,10 +26,10 @@ if (earth) {
   const earthPos = getBodyPosition(earth, time.currentJulian);
   camera.x = earthPos.x;
   camera.y = earthPos.y;
-  // Set zoom to show Earth at ~200px radius (good for seeing satellite system)
-  // Earth radius is ~6371 km, so zoom = 200px / 6371km ≈ 0.031
-  camera['_zoom'] = 0.03;
-  camera['_targetZoom'] = 0.03;
+  // Set zoom to show Earth at ~40px radius (5x wider view for full satellite system)
+  // Earth radius is ~6371 km, so zoom = 40px / 6371km ≈ 0.006
+  camera['_zoom'] = 0.006;
+  camera['_targetZoom'] = 0.006;
 }
 
 // Current moon filter level
@@ -154,7 +154,8 @@ function getAutoSpeed(zoom: number): number {
   }
 
   const maxSpeed = 10000 * 31536000; // 10000 years per second
-  return Math.min(Math.exp(logSpeed), maxSpeed);
+  const minSpeed = 1; // Minimum 1 second per second (realtime)
+  return Math.max(minSpeed, Math.min(Math.exp(logSpeed), maxSpeed));
 }
 
 // Handle window resize
@@ -166,6 +167,16 @@ window.addEventListener('resize', () => {
 let mouseX = 0;
 let mouseY = 0;
 
+// Track mouse down position to detect drag vs click
+let mouseDownX = 0;
+let mouseDownY = 0;
+const DRAG_THRESHOLD = 5; // pixels
+
+canvas.addEventListener('mousedown', (e) => {
+  mouseDownX = e.offsetX;
+  mouseDownY = e.offsetY;
+});
+
 canvas.addEventListener('mousemove', (e) => {
   mouseX = e.offsetX;
   mouseY = e.offsetY;
@@ -173,9 +184,18 @@ canvas.addEventListener('mousemove', (e) => {
 
 // Handle click to select body
 canvas.addEventListener('click', (e) => {
-  // Ignore if this was a drag (mouse moved significantly)
   mouseX = e.offsetX;
   mouseY = e.offsetY;
+
+  // Calculate distance from mousedown to click
+  const dx = mouseX - mouseDownX;
+  const dy = mouseY - mouseDownY;
+  const dragDistance = Math.sqrt(dx * dx + dy * dy);
+
+  // Ignore if this was a drag (mouse moved significantly)
+  if (dragDistance > DRAG_THRESHOLD) {
+    return;
+  }
 
   const clickedBody = getHoveredBody(time.currentJulian);
   if (clickedBody) {

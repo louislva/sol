@@ -1,5 +1,6 @@
 import { type CelestialBody, getBodyPosition } from '../astronomy/bodies';
 import { AU_KM, julianToDate } from '../astronomy/constants';
+import { fetchWikipediaSummary } from '../utils/wikipedia';
 
 const sidebar = document.getElementById('sidebar')!;
 const sidebarContent = document.getElementById('sidebar-content')!;
@@ -7,6 +8,9 @@ const closeBtn = document.getElementById('sidebar-close')!;
 
 let selectedBody: CelestialBody | null = null;
 let onCloseCallback: (() => void) | null = null;
+let wikipediaSummary: string | null = null;
+let wikipediaUrl: string | null = null;
+let isLoadingWikipedia = false;
 
 // Close button handler
 closeBtn.addEventListener('click', () => {
@@ -20,12 +24,35 @@ closeBtn.addEventListener('click', () => {
 export function show(body: CelestialBody, julianDate: number): void {
   selectedBody = body;
   sidebar.classList.remove('hidden');
+
+  // Reset Wikipedia state
+  wikipediaSummary = null;
+  wikipediaUrl = null;
+  isLoadingWikipedia = true;
+
   update(julianDate);
+
+  // Fetch Wikipedia summary asynchronously
+  fetchWikipediaSummary(body.name).then((summary) => {
+    isLoadingWikipedia = false;
+    if (summary && selectedBody?.name === body.name) {
+      wikipediaSummary = summary.extract;
+      wikipediaUrl = summary.content_urls?.desktop.page || null;
+      update(julianDate);
+    } else {
+      wikipediaSummary = null;
+      wikipediaUrl = null;
+      update(julianDate);
+    }
+  });
 }
 
 export function hide(): void {
   selectedBody = null;
   sidebar.classList.add('hidden');
+  wikipediaSummary = null;
+  wikipediaUrl = null;
+  isLoadingWikipedia = false;
 }
 
 export function isVisible(): boolean {
@@ -185,6 +212,24 @@ export function update(julianDate: number): void {
       <div class="sidebar-value">${(pos.y / AU_KM).toFixed(4)} AU</div>
     </div>
   `;
+
+  // Wikipedia summary section (at bottom)
+  if (isLoadingWikipedia) {
+    html += `
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-wikipedia">
+        <div class="sidebar-wikipedia-loading">Loading Wikipedia summary...</div>
+      </div>
+    `;
+  } else if (wikipediaSummary) {
+    html += `
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-wikipedia">
+        <div class="sidebar-wikipedia-content">${wikipediaSummary}</div>
+        ${wikipediaUrl ? `<a href="${wikipediaUrl}" target="_blank" class="sidebar-wikipedia-link">Read more on Wikipedia →</a>` : ''}
+      </div>
+    `;
+  }
 
   sidebarContent.innerHTML = html;
 }
