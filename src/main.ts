@@ -1,7 +1,7 @@
 import './style.css';
 import { Camera } from './core/camera';
 import { Renderer } from './core/renderer';
-import { TimeSystem } from './core/time';
+import { TimeSystem, type SpeedMode, SPEED_VALUES } from './core/time';
 import { allBodies, type CelestialBody, getBodyPosition } from './astronomy/bodies';
 import { allMoons } from './data/moons';
 import { allProbes } from './data/probes';
@@ -32,24 +32,40 @@ console.log(`Loaded ${asteroidBelt.count} asteroids`);
 
 // UI elements
 const dateDisplay = document.getElementById('date-display')!;
-const speedDisplay = document.getElementById('speed-display')!;
-const pauseBtn = document.getElementById('pause')!;
-const fasterBtn = document.getElementById('faster')!;
-const slowerBtn = document.getElementById('slower')!;
+const speedButtons = document.querySelectorAll('.speed-option') as NodeListOf<HTMLButtonElement>;
 
-// Set up controls
-pauseBtn.addEventListener('click', () => {
-  time.togglePause();
-  pauseBtn.textContent = time.paused ? '▶' : '⏸';
+// Set up speed selector
+speedButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.speed as SpeedMode;
+    time.setSpeedMode(mode);
+
+    // Update active state
+    speedButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
 });
 
-fasterBtn.addEventListener('click', () => {
-  time.faster();
-});
+// Calculate auto speed based on zoom level
+function getAutoSpeed(zoom: number): number {
+  // At very high zoom (close to planets), slow down
+  // At low zoom (seeing whole system), speed up
+  // zoom is pixels per km
 
-slowerBtn.addEventListener('click', () => {
-  time.slower();
-});
+  if (zoom > 0.001) {
+    // Very zoomed in - realtime to see moons/probes move
+    return SPEED_VALUES.realtime;
+  } else if (zoom > 0.0000001) {
+    // Medium zoom - 1 day per second
+    return SPEED_VALUES.day;
+  } else if (zoom > 0.00000001) {
+    // Zoomed out - 1 month per second
+    return SPEED_VALUES.month;
+  } else {
+    // Very zoomed out - 1 year per second
+    return SPEED_VALUES.year;
+  }
+}
 
 // Handle window resize
 window.addEventListener('resize', () => {
@@ -96,6 +112,11 @@ function getHoveredBody(julianDate: number): CelestialBody | null {
 
 // Main render loop
 function animate(): void {
+  // Update auto speed based on zoom if in auto mode
+  if (time.speedMode === 'auto') {
+    time.setTimeScale(getAutoSpeed(camera.zoom));
+  }
+
   // Update time
   time.update();
 
@@ -118,7 +139,6 @@ function animate(): void {
 
   // Update UI
   dateDisplay.textContent = time.formatDate();
-  speedDisplay.textContent = time.getSpeedLabel();
 
   requestAnimationFrame(animate);
 }

@@ -12,11 +12,12 @@
     <canvas id="canvas"></canvas>
     <div id="ui">
       <div id="date-display"></div>
-      <div id="controls">
-        <button id="slower">&#x276E;&#x276E;</button>
-        <button id="pause">&#x23F8;</button>
-        <button id="faster">&#x276F;&#x276F;</button>
-        <span id="speed-display">1x</span>
+      <div id="speed-selector">
+        <button class="speed-option active" data-speed="auto">Auto</button>
+        <button class="speed-option" data-speed="realtime">Realtime</button>
+        <button class="speed-option" data-speed="day">1 day / s</button>
+        <button class="speed-option" data-speed="month">1 month / s</button>
+        <button class="speed-option" data-speed="year">1 year / s</button>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
