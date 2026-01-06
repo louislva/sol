@@ -28,6 +28,11 @@ export function rad2deg(rad: number): number {
 // Body type for rendering
 export type BodyType = 'star' | 'planet' | 'dwarf' | 'moon' | 'asteroid' | 'comet' | 'probe';
 
+// Spacecraft-specific types
+export type SpacecraftType = 'deep_space' | 'earth_orbiter' | 'planetary_orbiter' | 'lander';
+export type SpacecraftStatus = 'active' | 'ended' | 'planned';
+export type SpacecraftIconType = 'probe' | 'orbiter' | 'telescope' | 'rover';
+
 // Moon category for filtering (based on size/significance)
 // major: radius > 100km (scientifically significant moons)
 // medium: radius > 10km (smaller named moons)
@@ -67,4 +72,19 @@ export const PLANET_COLORS: Record<string, string> = {
   saturn: '#ffdd88',
   uranus: '#66ffff',
   neptune: '#4466ff',
+};
+
+// Spacecraft colors by status
+export const SPACECRAFT_STATUS_COLORS: Record<SpacecraftStatus, string> = {
+  active: '#66ff66',   // Green for active missions
+  ended: '#888888',    // Gray for ended missions
+  planned: '#6666ff',  // Blue for planned/future
+};
+
+// Spacecraft colors by icon type
+export const SPACECRAFT_ICON_COLORS: Record<SpacecraftIconType, string> = {
+  probe: '#ffffff',      // White (deep space probes)
+  orbiter: '#66ccff',    // Light blue (planetary orbiters)
+  telescope: '#ff66ff',  // Magenta (space telescopes)
+  rover: '#ffaa66',      // Orange (surface rovers/landers)
 };

@@ -1,6 +1,6 @@
 import { Camera } from './camera';
 import { type CelestialBody, getBodyPosition, getOrbitPath, setBodyMap } from '../astronomy/bodies';
-import { MIN_DISPLAY_SIZE } from '../astronomy/constants';
+import { MIN_DISPLAY_SIZE, type SpacecraftIconType } from '../astronomy/constants';
 import { AsteroidBelt } from '../astronomy/asteroidBelt';
 
 // Cached orbit data
@@ -163,9 +163,10 @@ export class Renderer {
     const isHovered = body.name === this.hoveredBodyName;
     const displayColor = isHovered ? this.brightenColor(body.color) : body.color;
 
-    // Draw probe/satellite with special icon
+    // Draw probe/satellite with special icon based on type
     if (body.type === 'probe') {
-      this.renderProbeIcon(screenPos.x, screenPos.y, radiusPixels, displayColor);
+      const iconType = body.iconType || 'probe';
+      this.renderSpacecraftIcon(screenPos.x, screenPos.y, radiusPixels, displayColor, iconType);
     } else {
       // Draw the body as circle
       this.ctx.beginPath();
@@ -295,7 +296,32 @@ export class Renderer {
     this.ctx.globalAlpha = 1;
   }
 
-  // Draw probe/satellite icon: white cylinder with 4 solar panels
+  // Render spacecraft icon based on type
+  private renderSpacecraftIcon(
+    x: number,
+    y: number,
+    size: number,
+    color: string,
+    iconType: SpacecraftIconType
+  ): void {
+    switch (iconType) {
+      case 'telescope':
+        this.renderTelescopeIcon(x, y, size, color);
+        break;
+      case 'orbiter':
+        this.renderOrbiterIcon(x, y, size, color);
+        break;
+      case 'rover':
+        this.renderRoverIcon(x, y, size, color);
+        break;
+      case 'probe':
+      default:
+        this.renderProbeIcon(x, y, size, color);
+        break;
+    }
+  }
+
+  // Draw probe/satellite icon: cylinder with 4 solar panels
   //   [■] [▬] [■]
   //   [■] [▬] [■]
   private renderProbeIcon(x: number, y: number, size: number, color: string): void {
@@ -325,6 +351,84 @@ export class Renderer {
     // Arms (thin lines connecting body to panels)
     this.ctx.fillRect(x - panelX + panelW / 2, y - 0.5, panelX - panelW / 2 - bodyW / 2, 1);
     this.ctx.fillRect(x + bodyW / 2, y - 0.5, panelX - panelW / 2 - bodyW / 2, 1);
+  }
+
+  // Draw telescope icon: cylinder with sunshield (hexagonal top)
+  // Represents JWST, Hubble, Kepler, etc.
+  private renderTelescopeIcon(x: number, y: number, size: number, color: string): void {
+    const s = Math.max(size, 2);
+    this.ctx.fillStyle = color;
+
+    // Main body (tall cylinder)
+    const bodyW = s * 0.4;
+    const bodyH = s * 1.6;
+    this.ctx.fillRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH);
+
+    // Hexagonal sunshield at top (simplified as triangle)
+    this.ctx.beginPath();
+    this.ctx.moveTo(x, y - bodyH / 2 - s * 0.5);  // Top point
+    this.ctx.lineTo(x - s * 0.6, y - bodyH / 2 + s * 0.2);  // Bottom left
+    this.ctx.lineTo(x + s * 0.6, y - bodyH / 2 + s * 0.2);  // Bottom right
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Solar panels (smaller, on sides)
+    const panelW = s * 0.4;
+    const panelH = s * 0.25;
+    this.ctx.fillRect(x - s * 0.7 - panelW / 2, y, panelW, panelH);
+    this.ctx.fillRect(x + s * 0.7 - panelW / 2, y, panelW, panelH);
+
+    // Panel arms
+    this.ctx.fillRect(x - s * 0.7 + panelW / 2, y + panelH / 2 - 0.5, s * 0.3, 1);
+    this.ctx.fillRect(x + bodyW / 2, y + panelH / 2 - 0.5, s * 0.3, 1);
+  }
+
+  // Draw orbiter icon: diamond/angular spacecraft shape
+  // Represents planetary orbiters (Mars Express, Juno, etc.)
+  private renderOrbiterIcon(x: number, y: number, size: number, color: string): void {
+    const s = Math.max(size, 2);
+    this.ctx.fillStyle = color;
+
+    // Diamond-shaped body
+    this.ctx.beginPath();
+    this.ctx.moveTo(x, y - s * 0.8);     // Top
+    this.ctx.lineTo(x + s * 0.5, y);      // Right
+    this.ctx.lineTo(x, y + s * 0.8);      // Bottom
+    this.ctx.lineTo(x - s * 0.5, y);      // Left
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Small solar panels
+    const panelW = s * 0.5;
+    const panelH = s * 0.2;
+    this.ctx.fillRect(x - s * 0.9 - panelW / 2, y - panelH / 2, panelW, panelH);
+    this.ctx.fillRect(x + s * 0.9 - panelW / 2, y - panelH / 2, panelW, panelH);
+
+    // Panel arms
+    this.ctx.fillRect(x - s * 0.9 + panelW / 2, y - 0.5, s * 0.4, 1);
+    this.ctx.fillRect(x + s * 0.5, y - 0.5, s * 0.4, 1);
+  }
+
+  // Draw rover/lander icon: box with wheels/legs
+  // Represents Perseverance, Curiosity, landers
+  private renderRoverIcon(x: number, y: number, size: number, color: string): void {
+    const s = Math.max(size, 2);
+    this.ctx.fillStyle = color;
+
+    // Main body (rectangle)
+    const bodyW = s * 1.2;
+    const bodyH = s * 0.6;
+    this.ctx.fillRect(x - bodyW / 2, y - bodyH / 2, bodyW, bodyH);
+
+    // "Mast" / antenna on top
+    this.ctx.fillRect(x - s * 0.1, y - bodyH / 2 - s * 0.5, s * 0.2, s * 0.5);
+
+    // Wheels/legs (circles at corners)
+    const wheelR = s * 0.2;
+    this.ctx.beginPath();
+    this.ctx.arc(x - bodyW / 2 + wheelR, y + bodyH / 2, wheelR, 0, Math.PI * 2);
+    this.ctx.arc(x + bodyW / 2 - wheelR, y + bodyH / 2, wheelR, 0, Math.PI * 2);
+    this.ctx.fill();
   }
 
   renderAll(bodies: CelestialBody[], julianDate: number): void {

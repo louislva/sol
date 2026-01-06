@@ -53,12 +53,22 @@ function solveKepler(M: number, e: number, tolerance: number = 1e-8): number {
 
 // Solve hyperbolic Kepler's equation: M = e*sinh(H) - H
 function solveKeplerHyperbolic(M: number, e: number, tolerance: number = 1e-8): number {
-  // Initial guess
-  let H = M;
+  // Better initial guess for hyperbolic orbits
+  // For large |M|, H ≈ sign(M) * ln(2|M|/e) is a good approximation
+  // For small |M|, H ≈ M works fine
+  let H: number;
+  if (Math.abs(M) < 1) {
+    H = M;
+  } else {
+    // Use logarithmic approximation for large M
+    H = Math.sign(M) * Math.log(2 * Math.abs(M) / e + 1.8);
+  }
 
   // Newton-Raphson iteration
   for (let i = 0; i < 50; i++) {
-    const dH = (e * Math.sinh(H) - H - M) / (e * Math.cosh(H) - 1);
+    const sinhH = Math.sinh(H);
+    const coshH = Math.cosh(H);
+    const dH = (e * sinhH - H - M) / (e * coshH - 1);
     H -= dH;
     if (Math.abs(dH) < tolerance) break;
   }

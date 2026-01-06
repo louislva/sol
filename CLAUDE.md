@@ -8,6 +8,18 @@ Top-down solar system visualization. Clean, elegant, geometric like Mini Metro. 
 - **HTML5 Canvas 2D** - smooth zoom/pan
 - **Keplerian orbital mechanics** - calculate positions from orbital elements
 
+## IMPORTANT: Data Integrity
+**NEVER generate fake or placeholder data.** All orbital data must come from authoritative sources:
+- NASA JPL Horizons / Small-Body Database
+- Minor Planet Center
+- IAU official sources
+
+If data is not available, either:
+1. Write a fetch script to get real data
+2. Leave the object out until real data can be obtained
+
+Random/procedural generation of orbital parameters is NOT acceptable.
+
 ## Development
 ```bash
 npm run dev      # Start dev server
@@ -38,10 +50,15 @@ src/
 │   ├── asteroidBelt.ts     # LOD system for 10,000+ asteroids
 │   └── tle.ts              # TLE parsing for satellites
 ├── data/
-│   ├── moons.ts            # Moon orbital data (20 moons)
-│   ├── probes.ts           # Space probes with segmented orbits
+│   ├── moons.json          # Moon orbital data from JPL (66 moons)
+│   ├── moons.ts            # Moon data loader and filtering
+│   ├── probes.ts           # Space probes with segmented orbits (legacy)
+│   ├── spacecraft.json     # Spacecraft data from JPL Horizons (29+ missions)
+│   ├── spacecraft.ts       # Spacecraft loader with timeline filtering
 │   └── comets.ts           # Comet orbital data
 scripts/
+├── fetch-moons.ts          # Download moon data from JPL Horizons
+├── fetch-spacecraft.ts     # Download spacecraft data from JPL Horizons
 ├── fetch-asteroids.ts      # Download MPCORB asteroid data
 ├── fetch-satellites.ts     # Download TLE satellite data
 └── README.md               # Data regeneration docs
@@ -81,17 +98,18 @@ segments: [
 Bodies fade out when visually inside their parent's minimum display size.
 Labels fade earlier (32-64px from parent edge).
 
-## Current Status (Phase 2 Complete)
+## Current Status (Phase 3 In Progress)
 - [x] Canvas with zoom/pan
 - [x] 8 planets with real orbital data
 - [x] Time simulation with speed controls
 - [x] Dwarf planets (Pluto, Ceres, Eris, Makemake, Haumea)
-- [x] Major moons (20 moons: Moon, Galilean, Titan, Triton, etc.)
+- [x] Major moons (66 moons from JPL Horizons)
 - [x] Asteroid belt with LOD (10,000 asteroids)
 - [x] Notable comets (Halley, Hale-Bopp, NEOWISE, etc.)
-- [x] Space probes (Voyager 1&2, New Horizons, Pioneer 10&11)
-- [x] Custom probe icon (white cylinder + solar panels)
-- [x] Data fetch scripts for asteroids and satellites
+- [x] Space probes from JPL Horizons (29+ missions with real ephemerides)
+- [x] Custom spacecraft icons (probe, telescope, orbiter, rover)
+- [x] Timeline filtering (spacecraft appear/disappear based on mission dates)
+- [x] Data fetch scripts for asteroids, satellites, and spacecraft
 
 ## Future Features
 - [ ] Earth satellites (LEO, GEO) visible when zoomed to Earth
@@ -103,12 +121,16 @@ Labels fade earlier (32-64px from parent edge).
 
 ## Data Sources
 - **Planets**: NASA JPL Horizons (https://ssd.jpl.nasa.gov/planets/approx_pos.html)
+- **Moons**: NASA JPL Horizons API (https://ssd.jpl.nasa.gov/api/horizons.api)
+- **Spacecraft**: NASA JPL Horizons API (orbital elements for 29+ missions)
 - **Asteroids**: Minor Planet Center MPCORB (https://www.minorplanetcenter.net/)
 - **Satellites**: CelesTrak TLE (https://celestrak.org/)
 - **Comets**: NASA JPL Small-Body Database
 
 ## Regenerating Data
 ```bash
+npx tsx scripts/fetch-moons.ts        # Fetch moon data from JPL Horizons
+npx tsx scripts/fetch-spacecraft.ts   # Fetch spacecraft data from JPL Horizons
 npx ts-node scripts/fetch-asteroids.ts 10000
 npx ts-node scripts/fetch-satellites.ts
 ```

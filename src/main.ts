@@ -6,6 +6,7 @@ import { allBodies, type CelestialBody, getBodyPosition } from './astronomy/bodi
 import { filterMoons } from './data/moons';
 import { allProbes } from './data/probes';
 import { allComets } from './data/comets';
+import { loadSpacecraftData, getVisibleSpacecraft, hasSpacecraftData } from './data/spacecraft';
 import { AsteroidBelt, generateSampleAsteroids } from './astronomy/asteroidBelt';
 import { MIN_DISPLAY_SIZE, type MoonCategory } from './astronomy/constants';
 
@@ -20,18 +21,34 @@ const time = new TimeSystem();
 // Current moon filter level
 let currentMoonFilter: MoonCategory = 'medium';
 
-// Build bodies array based on current moon filter
-function buildBodies(): CelestialBody[] {
-  return [
+// Build bodies array based on current moon filter and time
+function buildBodies(julianDate?: number): CelestialBody[] {
+  const bodies = [
     ...allBodies,                      // Sun, planets, dwarf planets
     ...filterMoons(currentMoonFilter), // Moons filtered by category
-    ...allProbes,                      // Space probes
     ...allComets,                      // Comets
   ];
+
+  // Add spacecraft - prefer JPL Horizons data over legacy manual data
+  if (hasSpacecraftData() && julianDate) {
+    // Use accurate JPL data with timeline filtering
+    bodies.push(...getVisibleSpacecraft(julianDate));
+  } else {
+    // Fallback to legacy manual probes if JPL data not loaded
+    bodies.push(...allProbes);
+  }
+
+  return bodies;
 }
 
 // Combine all celestial bodies
 let bodies: CelestialBody[] = buildBodies();
+
+// Load spacecraft data asynchronously
+loadSpacecraftData().then(() => {
+  // Rebuild bodies array with spacecraft data
+  bodies = buildBodies(time.currentJulian);
+});
 
 // Initialize asteroid belt with sample data
 // For production: load from src/data/asteroids.json
@@ -63,7 +80,7 @@ moonButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     const category = btn.dataset.moons as MoonCategory;
     currentMoonFilter = category;
-    bodies = buildBodies();
+    bodies = buildBodies(time.currentJulian);
 
     // Update active state
     moonButtons.forEach(b => b.classList.remove('active'));
@@ -143,6 +160,10 @@ function getHoveredBody(julianDate: number): CelestialBody | null {
   return closest;
 }
 
+// Track last time we rebuilt bodies for timeline filtering
+let lastBodiesRebuildJD = 0;
+const BODIES_REBUILD_INTERVAL = 1; // Rebuild every ~1 Julian day
+
 // Main render loop
 function animate(): void {
   // Update auto speed based on zoom if in auto mode
@@ -152,6 +173,12 @@ function animate(): void {
 
   // Update time
   time.update();
+
+  // Rebuild bodies periodically for spacecraft timeline filtering
+  if (hasSpacecraftData() && Math.abs(time.currentJulian - lastBodiesRebuildJD) > BODIES_REBUILD_INTERVAL) {
+    bodies = buildBodies(time.currentJulian);
+    lastBodiesRebuildJD = time.currentJulian;
+  }
 
   // Update hover target for zoom centering and visual feedback
   const hoveredBody = getHoveredBody(time.currentJulian);

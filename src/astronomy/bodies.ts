@@ -6,7 +6,15 @@ import {
   calculateParentCentricPosition,
   calculateParentCentricOrbitPath,
 } from './kepler';
-import { type BodyType, type MoonCategory, PLANET_COLORS, BODY_COLORS } from './constants';
+import {
+  type BodyType,
+  type MoonCategory,
+  type SpacecraftType,
+  type SpacecraftStatus,
+  type SpacecraftIconType,
+  PLANET_COLORS,
+  BODY_COLORS,
+} from './constants';
 
 export interface CelestialBody {
   name: string;
@@ -29,6 +37,14 @@ export interface CelestialBody {
   parentCentricElements?: ParentCentricElements;
   // For moons: category for filtering (major/medium/named/minor)
   moonCategory?: MoonCategory;
+
+  // Spacecraft-specific fields
+  spkid?: number;                    // JPL SPK ID (negative for spacecraft)
+  missionType?: SpacecraftType;      // Type of mission
+  missionStatus?: SpacecraftStatus;  // Active, ended, or planned
+  launchJD?: number;                 // Mission start (Julian date)
+  endJD?: number;                    // Mission end (Julian date, optional)
+  iconType?: SpacecraftIconType;     // Which icon to render
 }
 
 // Get orbital elements for a given date (handles segmented orbits)
