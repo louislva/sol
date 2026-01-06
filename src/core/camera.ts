@@ -16,7 +16,7 @@ export class Camera {
 
   // Zoom limits
   private minZoom = 1e-12;  // See past Neptune
-  private maxZoom = 0.01;   // Zoom into individual planets
+  private maxZoom = 1;      // Zoom in very close
 
   // Pan state
   private isPanning = false;
