@@ -3,11 +3,11 @@ import { Camera } from './core/camera';
 import { Renderer } from './core/renderer';
 import { TimeSystem, type SpeedMode } from './core/time';
 import { allBodies, type CelestialBody, getBodyPosition } from './astronomy/bodies';
-import { allMoons } from './data/moons';
+import { filterMoons } from './data/moons';
 import { allProbes } from './data/probes';
 import { allComets } from './data/comets';
 import { AsteroidBelt, generateSampleAsteroids } from './astronomy/asteroidBelt';
-import { MIN_DISPLAY_SIZE } from './astronomy/constants';
+import { MIN_DISPLAY_SIZE, type MoonCategory } from './astronomy/constants';
 
 // Get canvas element
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -17,13 +17,21 @@ const camera = new Camera(canvas);
 const renderer = new Renderer(canvas, camera);
 const time = new TimeSystem();
 
+// Current moon filter level
+let currentMoonFilter: MoonCategory = 'medium';
+
+// Build bodies array based on current moon filter
+function buildBodies(): CelestialBody[] {
+  return [
+    ...allBodies,                      // Sun, planets, dwarf planets
+    ...filterMoons(currentMoonFilter), // Moons filtered by category
+    ...allProbes,                      // Space probes
+    ...allComets,                      // Comets
+  ];
+}
+
 // Combine all celestial bodies
-const bodies: CelestialBody[] = [
-  ...allBodies,   // Sun, planets, dwarf planets
-  ...allMoons,    // Moons of planets
-  ...allProbes,   // Space probes
-  ...allComets,   // Comets
-];
+let bodies: CelestialBody[] = buildBodies();
 
 // Initialize asteroid belt with sample data
 // For production: load from src/data/asteroids.json
@@ -36,6 +44,7 @@ const currentSpeedEl = document.getElementById('current-speed')!;
 const zoomLevelEl = document.getElementById('zoom-level')!;
 const orbitResolutionEl = document.getElementById('orbit-resolution')!;
 const speedButtons = document.querySelectorAll('.speed-option') as NodeListOf<HTMLButtonElement>;
+const moonButtons = document.querySelectorAll('.moon-option') as NodeListOf<HTMLButtonElement>;
 
 // Set up speed selector
 speedButtons.forEach(btn => {
@@ -46,6 +55,21 @@ speedButtons.forEach(btn => {
     // Update active state
     speedButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+  });
+});
+
+// Set up moon filter selector
+moonButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const category = btn.dataset.moons as MoonCategory;
+    currentMoonFilter = category;
+    bodies = buildBodies();
+
+    // Update active state
+    moonButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    console.log(`Moon filter: ${category} (${filterMoons(category).length} moons)`);
   });
 });
 

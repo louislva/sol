@@ -84,6 +84,45 @@ body {
   color: var(--text);
 }
 
+#moon-selector {
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 4px 8px;
+  gap: 4px;
+}
+
+#moon-selector span {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.moon-option {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.moon-option:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.moon-option.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text);
+}
+
 #speed-indicator {
   font-size: 11px;
   color: var(--text-dim);

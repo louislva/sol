@@ -6,7 +6,7 @@ import {
   calculateParentCentricPosition,
   calculateParentCentricOrbitPath,
 } from './kepler';
-import { type BodyType, PLANET_COLORS, BODY_COLORS } from './constants';
+import { type BodyType, type MoonCategory, PLANET_COLORS, BODY_COLORS } from './constants';
 
 export interface CelestialBody {
   name: string;
@@ -27,6 +27,8 @@ export interface CelestialBody {
   parentName?: string;
   // For moons/satellites: orbital elements relative to parent (in km)
   parentCentricElements?: ParentCentricElements;
+  // For moons: category for filtering (major/medium/named/minor)
+  moonCategory?: MoonCategory;
 }
 
 // Get orbital elements for a given date (handles segmented orbits)

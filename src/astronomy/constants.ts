@@ -28,6 +28,13 @@ export function rad2deg(rad: number): number {
 // Body type for rendering
 export type BodyType = 'star' | 'planet' | 'dwarf' | 'moon' | 'asteroid' | 'comet' | 'probe';
 
+// Moon category for filtering (based on size/significance)
+// major: radius > 100km (scientifically significant moons)
+// medium: radius > 10km (smaller named moons)
+// named: has official IAU name but radius <= 10km
+// minor: provisional designation only (tiny captured asteroids)
+export type MoonCategory = 'major' | 'medium' | 'named' | 'minor';
+
 // Minimum display sizes in pixels per body type
 export const MIN_DISPLAY_SIZE: Record<BodyType, number> = {
   star: 20,
