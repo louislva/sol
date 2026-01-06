@@ -55,8 +55,8 @@ export class Renderer {
     const dy = bodyScreen.y - parentScreen.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Fade out over 4px as body approaches parent's edge
-    const fadeDistance = 4;
+    // Fade out as body approaches parent's edge (16px for sun, 4px for others)
+    const fadeDistance = parent.type === 'star' ? 16 : 4;
     const fadeStart = parentRadiusPixels + fadeDistance;
 
     if (distance >= fadeStart) return 1; // Fully visible
@@ -64,6 +64,37 @@ export class Renderer {
 
     // Linear fade between fadeStart and parentRadiusPixels
     return (distance - parentRadiusPixels) / fadeDistance;
+  }
+
+  // Separate opacity calculation for labels - fades earlier (24px from any parent)
+  private getLabelOcclusionOpacity(body: CelestialBody, julianDate: number): number {
+    if (body.type === 'star' || body.fixedPosition) return 1;
+
+    const parentName = body.parentName || 'Sun';
+    const parent = this.bodyMap.get(parentName);
+    if (!parent) return 1;
+
+    const bodyPos = getBodyPosition(body, julianDate);
+    const parentPos = getBodyPosition(parent, julianDate);
+
+    const bodyScreen = this.camera.worldToScreen(bodyPos.x, bodyPos.y);
+    const parentScreen = this.camera.worldToScreen(parentPos.x, parentPos.y);
+
+    let parentRadiusPixels = this.camera.kmToPixels(parent.radius);
+    const parentMinSize = MIN_DISPLAY_SIZE[parent.type];
+    parentRadiusPixels = Math.max(parentRadiusPixels, parentMinSize);
+
+    const dx = bodyScreen.x - parentScreen.x;
+    const dy = bodyScreen.y - parentScreen.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    const fadeEnd = parentRadiusPixels + 16;   // Fully hidden at 16px from edge
+    const fadeStart = parentRadiusPixels + 32; // Start fading at 32px from edge
+
+    if (distance >= fadeStart) return 1;
+    if (distance <= fadeEnd) return 0;
+
+    return (distance - fadeEnd) / (fadeStart - fadeEnd);
   }
 
   clear(): void {
@@ -121,7 +152,8 @@ export class Renderer {
 
     // Draw label if body is at minimum size (contextual visibility)
     if (radiusPixels <= minSize * 1.5) {
-      this.renderLabel(body.name, screenPos.x, screenPos.y + radiusPixels + 12, occlusionOpacity);
+      const labelOpacity = this.getLabelOcclusionOpacity(body, julianDate);
+      this.renderLabel(body.name, screenPos.x, screenPos.y + radiusPixels + 12, labelOpacity);
     }
   }
 
