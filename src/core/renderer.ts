@@ -16,14 +16,55 @@ export class Renderer {
   private orbitCache: Map<string, OrbitCache> = new Map();
   private readonly CACHE_DURATION = 1; // Recalculate every ~1 Julian day
 
+  // Body lookup map for parent occlusion checks
+  private bodyMap: Map<string, CelestialBody> = new Map();
+
   // Parchment colors
   private readonly bgColor = '#f4e4c1';
-  private readonly orbitColor = 'rgba(61, 61, 61, 0.3)';
   private readonly labelColor = '#2c2c2c';
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.ctx = canvas.getContext('2d')!;
     this.camera = camera;
+  }
+
+  // Check visibility of a body relative to its parent's minimum display size
+  // Returns opacity: 0 = fully hidden, 1 = fully visible
+  private getParentOcclusionOpacity(body: CelestialBody, julianDate: number): number {
+    // Stars have no parent
+    if (body.type === 'star' || body.fixedPosition) return 1;
+
+    // Get parent body (default to Sun for planets)
+    const parentName = body.parentName || 'Sun';
+    const parent = this.bodyMap.get(parentName);
+    if (!parent) return 1;
+
+    // Get positions in screen space
+    const bodyPos = getBodyPosition(body, julianDate);
+    const parentPos = getBodyPosition(parent, julianDate);
+
+    const bodyScreen = this.camera.worldToScreen(bodyPos.x, bodyPos.y);
+    const parentScreen = this.camera.worldToScreen(parentPos.x, parentPos.y);
+
+    // Calculate parent's display radius (clamped to minimum)
+    let parentRadiusPixels = this.camera.kmToPixels(parent.radius);
+    const parentMinSize = MIN_DISPLAY_SIZE[parent.type];
+    parentRadiusPixels = Math.max(parentRadiusPixels, parentMinSize);
+
+    // Calculate distance from body to parent center in screen space
+    const dx = bodyScreen.x - parentScreen.x;
+    const dy = bodyScreen.y - parentScreen.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Fade out over 4px as body approaches parent's edge
+    const fadeDistance = 4;
+    const fadeStart = parentRadiusPixels + fadeDistance;
+
+    if (distance >= fadeStart) return 1; // Fully visible
+    if (distance <= parentRadiusPixels) return 0; // Fully hidden
+
+    // Linear fade between fadeStart and parentRadiusPixels
+    return (distance - parentRadiusPixels) / fadeDistance;
   }
 
   clear(): void {
@@ -35,6 +76,10 @@ export class Renderer {
   }
 
   renderBody(body: CelestialBody, julianDate: number): void {
+    // Get opacity based on parent occlusion (fade out near parent)
+    const occlusionOpacity = this.getParentOcclusionOpacity(body, julianDate);
+    if (occlusionOpacity <= 0) return;
+
     const pos = getBodyPosition(body, julianDate);
     const screenPos = this.camera.worldToScreen(pos.x, pos.y);
 
@@ -56,6 +101,9 @@ export class Renderer {
       return;
     }
 
+    // Apply occlusion opacity
+    this.ctx.globalAlpha = occlusionOpacity;
+
     // Draw the body
     this.ctx.beginPath();
     this.ctx.arc(screenPos.x, screenPos.y, radiusPixels, 0, Math.PI * 2);
@@ -69,9 +117,12 @@ export class Renderer {
       this.ctx.stroke();
     }
 
+    // Reset alpha
+    this.ctx.globalAlpha = 1;
+
     // Draw label if body is at minimum size (contextual visibility)
     if (radiusPixels <= minSize * 1.5) {
-      this.renderLabel(body.name, screenPos.x, screenPos.y + radiusPixels + 12);
+      this.renderLabel(body.name, screenPos.x, screenPos.y + radiusPixels + 12, occlusionOpacity);
     }
   }
 
@@ -92,6 +143,10 @@ export class Renderer {
   renderOrbit(body: CelestialBody, julianDate: number): void {
     if (body.type === 'star') return;
 
+    // Get opacity based on parent occlusion (fade out near parent)
+    const occlusionOpacity = this.getParentOcclusionOpacity(body, julianDate);
+    if (occlusionOpacity <= 0) return;
+
     const orbitPoints = this.getOrbitPoints(body, julianDate);
     if (orbitPoints.length < 2) return;
 
@@ -111,9 +166,13 @@ export class Renderer {
     // Skip entirely if nothing visible
     if (!anyVisible) return;
 
+    // Apply occlusion opacity to the orbit color
+    const baseOpacity = 0.3; // From orbitColor rgba
+    this.ctx.globalAlpha = baseOpacity * occlusionOpacity;
+
     // Draw the orbit, but only move/line to visible segments
     this.ctx.beginPath();
-    this.ctx.strokeStyle = this.orbitColor;
+    this.ctx.strokeStyle = 'rgb(61, 61, 61)';
     this.ctx.lineWidth = 1;
     this.ctx.setLineDash([4, 4]);
 
@@ -146,19 +205,26 @@ export class Renderer {
 
     this.ctx.stroke();
     this.ctx.setLineDash([]);
+    this.ctx.globalAlpha = 1;
   }
 
-  renderLabel(text: string, x: number, y: number): void {
+  renderLabel(text: string, x: number, y: number, opacity: number = 1): void {
     this.ctx.font = '12px "Crimson Text", Georgia, serif';
     this.ctx.fillStyle = this.labelColor;
     this.ctx.textAlign = 'center';
-    this.ctx.globalAlpha = 0.7;
+    this.ctx.globalAlpha = 0.7 * opacity;
     this.ctx.fillText(text, x, y);
     this.ctx.globalAlpha = 1;
   }
 
   renderAll(bodies: CelestialBody[], julianDate: number): void {
     this.clear();
+
+    // Build body map for parent lookup in occlusion checks
+    this.bodyMap.clear();
+    for (const body of bodies) {
+      this.bodyMap.set(body.name, body);
+    }
 
     // Draw orbits first (behind bodies)
     for (const body of bodies) {

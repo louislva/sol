@@ -15,6 +15,9 @@ export interface CelestialBody {
   }>;
   // Fixed position for the Sun
   fixedPosition?: { x: number; y: number };
+  // Parent body name (e.g., 'Sun' for planets, 'Earth' for Moon)
+  // If not specified, defaults to 'Sun' for orbiting bodies
+  parentName?: string;
 }
 
 // Get orbital elements for a given date (handles segmented orbits)
