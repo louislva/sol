@@ -36,7 +36,7 @@ export const MIN_DISPLAY_SIZE: Record<BodyType, number> = {
   moon: 3,
   asteroid: 2,
   comet: 2,
-  probe: 2,
+  probe: 8,
 };
 
 // Simple colors on black
