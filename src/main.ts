@@ -1,7 +1,7 @@
 import './style.css';
 import { Camera } from './core/camera';
 import { Renderer } from './core/renderer';
-import { TimeSystem, type SpeedMode, SPEED_VALUES } from './core/time';
+import { TimeSystem, type SpeedMode } from './core/time';
 import { allBodies, type CelestialBody, getBodyPosition } from './astronomy/bodies';
 import { allMoons } from './data/moons';
 import { allProbes } from './data/probes';
@@ -32,19 +32,9 @@ console.log(`Loaded ${asteroidBelt.count} asteroids`);
 
 // UI elements
 const dateDisplay = document.getElementById('date-display')!;
-const speedIndicator = document.getElementById('speed-indicator')!;
+const currentSpeedEl = document.getElementById('current-speed')!;
+const zoomLevelEl = document.getElementById('zoom-level')!;
 const speedButtons = document.querySelectorAll('.speed-option') as NodeListOf<HTMLButtonElement>;
-
-// Format time scale for display
-function formatSpeed(scale: number): string {
-  if (scale < 60) return `${scale}x`;
-  if (scale < 3600) return `${Math.round(scale / 60)} min/s`;
-  if (scale < 86400) return `${Math.round(scale / 3600)} hr/s`;
-  if (scale < 604800) return `${Math.round(scale / 86400)} day/s`;
-  if (scale < 2592000) return `${Math.round(scale / 604800)} wk/s`;
-  if (scale < 31536000) return `${Math.round(scale / 2592000)} mo/s`;
-  return `${Math.round(scale / 31536000)} yr/s`;
-}
 
 // Set up speed selector
 speedButtons.forEach(btn => {
@@ -59,24 +49,35 @@ speedButtons.forEach(btn => {
 });
 
 // Calculate auto speed based on zoom level
+// Interpolates in log-log space between these points:
+// zoom 6.4e-5 → 1, zoom 2.7e-6 → 86400, zoom 1.2e-7 → 31536000
 function getAutoSpeed(zoom: number): number {
-  // At very high zoom (close to planets), slow down
-  // At low zoom (seeing whole system), speed up
-  // zoom is pixels per km
+  const logZoom = Math.log(zoom);
 
-  if (zoom > 0.001) {
-    // Very zoomed in - realtime to see moons/probes move
-    return SPEED_VALUES.realtime;
-  } else if (zoom > 0.0000001) {
-    // Medium zoom - 1 day per second
-    return SPEED_VALUES.day;
-  } else if (zoom > 0.00000001) {
-    // Zoomed out - 1 month per second
-    return SPEED_VALUES.month;
+  // Control points in log space [logZoom, logSpeed]
+  const p1 = { z: -9.66, s: 0 };        // 6.4e-5 → 1
+  const p2 = { z: -12.82, s: 11.37 };   // 2.7e-6 → 86400
+  const p3 = { z: -15.94, s: 17.27 };   // 1.2e-7 → 31536000
+
+  let logSpeed: number;
+
+  if (logZoom >= p1.z) {
+    // More zoomed in than p1 - clamp to realtime
+    logSpeed = p1.s;
+  } else if (logZoom >= p2.z) {
+    // Between p1 and p2
+    const t = (logZoom - p1.z) / (p2.z - p1.z);
+    logSpeed = p1.s + t * (p2.s - p1.s);
+  } else if (logZoom >= p3.z) {
+    // Between p2 and p3
+    const t = (logZoom - p2.z) / (p3.z - p2.z);
+    logSpeed = p2.s + t * (p3.s - p2.s);
   } else {
-    // Very zoomed out - 1 year per second
-    return SPEED_VALUES.year;
+    // More zoomed out than p3 - clamp to max
+    logSpeed = p3.s;
   }
+
+  return Math.exp(logSpeed);
 }
 
 // Handle window resize
@@ -151,7 +152,8 @@ function animate(): void {
 
   // Update UI
   dateDisplay.textContent = time.formatDate();
-  speedIndicator.textContent = formatSpeed(time.timeScale);
+  currentSpeedEl.textContent = `speed ${time.timeScale}`;
+  zoomLevelEl.textContent = `zoom ${camera.zoom.toExponential(1)}`;
 
   requestAnimationFrame(animate);
 }
