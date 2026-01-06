@@ -9,6 +9,7 @@ import { allComets } from './data/comets';
 import { loadSpacecraftData, getVisibleSpacecraft, hasSpacecraftData } from './data/spacecraft';
 import { AsteroidBelt, generateSampleAsteroids } from './astronomy/asteroidBelt';
 import { MIN_DISPLAY_SIZE, type MoonCategory } from './astronomy/constants';
+import * as sidebar from './ui/sidebar';
 
 // Get canvas element
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -136,12 +137,69 @@ canvas.addEventListener('mousemove', (e) => {
   mouseY = e.offsetY;
 });
 
+// Handle click to select body
+canvas.addEventListener('click', (e) => {
+  // Ignore if this was a drag (mouse moved significantly)
+  mouseX = e.offsetX;
+  mouseY = e.offsetY;
+
+  const clickedBody = getHoveredBody(time.currentJulian);
+  if (clickedBody) {
+    sidebar.show(clickedBody, time.currentJulian);
+    renderer.setSelectedBody(clickedBody.name);
+  } else {
+    sidebar.hide();
+    renderer.setSelectedBody(null);
+  }
+});
+
+// Handle sidebar close
+sidebar.setOnClose(() => {
+  renderer.setSelectedBody(null);
+});
+
+// Check if a body is occluded by its parent (hidden inside parent's display radius)
+function isOccludedByParent(body: CelestialBody, julianDate: number, bodyMap: Map<string, CelestialBody>): boolean {
+  if (body.type === 'star' || body.fixedPosition) return false;
+
+  const parentName = body.parentName || 'Sun';
+  const parent = bodyMap.get(parentName);
+  if (!parent) return false;
+
+  const bodyPos = getBodyPosition(body, julianDate);
+  const parentPos = getBodyPosition(parent, julianDate);
+
+  const bodyScreen = camera.worldToScreen(bodyPos.x, bodyPos.y);
+  const parentScreen = camera.worldToScreen(parentPos.x, parentPos.y);
+
+  // Get parent's display radius (clamped to minimum)
+  let parentRadiusPixels = camera.kmToPixels(parent.radius);
+  const parentMinSize = MIN_DISPLAY_SIZE[parent.type];
+  parentRadiusPixels = Math.max(parentRadiusPixels, parentMinSize);
+
+  // Calculate distance from body to parent center in screen space
+  const dx = bodyScreen.x - parentScreen.x;
+  const dy = bodyScreen.y - parentScreen.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  // Body is occluded if it's inside the parent's display radius
+  return distance <= parentRadiusPixels;
+}
+
 // Find body under cursor (for zoom centering)
 function getHoveredBody(julianDate: number): CelestialBody | null {
   let closest: CelestialBody | null = null;
   let closestDist = Infinity;
 
+  // Build body map for parent lookup
+  const bodyMap = new Map(bodies.map(b => [b.name, b]));
+
   for (const body of bodies) {
+    // Skip bodies that are occluded by their parent
+    if (isOccludedByParent(body, julianDate, bodyMap)) {
+      continue;
+    }
+
     const pos = getBodyPosition(body, julianDate);
     const screenPos = camera.worldToScreen(pos.x, pos.y);
 
@@ -207,6 +265,11 @@ function animate(): void {
   currentSpeedEl.textContent = `speed ${time.timeScale.toFixed(0)}`;
   zoomLevelEl.textContent = `zoom ${camera.zoom.toExponential(1)}`;
   orbitResolutionEl.textContent = `${renderer.getOrbitResolution()} pts`;
+
+  // Update sidebar if visible
+  if (sidebar.isVisible()) {
+    sidebar.update(time.currentJulian);
+  }
 
   requestAnimationFrame(animate);
 }

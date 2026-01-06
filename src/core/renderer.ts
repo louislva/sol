@@ -24,6 +24,9 @@ export class Renderer {
   // Currently hovered body name
   private hoveredBodyName: string | null = null;
 
+  // Currently selected body name (clicked)
+  private selectedBodyName: string | null = null;
+
   private readonly bgColor = '#000000';
   private readonly labelColor = '#cccccc';
 
@@ -34,6 +37,10 @@ export class Renderer {
 
   setHoveredBody(name: string | null): void {
     this.hoveredBodyName = name;
+  }
+
+  setSelectedBody(name: string | null): void {
+    this.selectedBodyName = name;
   }
 
   // Brighten a hex color for hover effect
@@ -159,9 +166,10 @@ export class Renderer {
     // Apply occlusion opacity
     this.ctx.globalAlpha = occlusionOpacity;
 
-    // Check if this body is hovered
+    // Check if this body is hovered or selected
     const isHovered = body.name === this.hoveredBodyName;
-    const displayColor = isHovered ? this.brightenColor(body.color) : body.color;
+    const isSelected = body.name === this.selectedBodyName;
+    const displayColor = (isHovered || isSelected) ? this.brightenColor(body.color) : body.color;
 
     // Draw probe/satellite with special icon based on type
     if (body.type === 'probe') {
@@ -180,6 +188,15 @@ export class Renderer {
         this.ctx.lineWidth = 0.5;
         this.ctx.stroke();
       }
+    }
+
+    // Draw selection ring around selected body
+    if (isSelected) {
+      this.ctx.beginPath();
+      this.ctx.arc(screenPos.x, screenPos.y, radiusPixels + 4, 0, Math.PI * 2);
+      this.ctx.strokeStyle = body.color;
+      this.ctx.lineWidth = 1.5;
+      this.ctx.stroke();
     }
 
     // Reset alpha
