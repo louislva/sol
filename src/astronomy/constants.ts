@@ -39,25 +39,25 @@ export const MIN_DISPLAY_SIZE: Record<BodyType, number> = {
   probe: 2,
 };
 
-// Colors for the parchment aesthetic
+// Simple colors on black
 export const BODY_COLORS: Record<BodyType, string> = {
-  star: '#d4a574',
-  planet: '#6b5b4f',
-  dwarf: '#7a6a5e',
-  moon: '#8b7b6f',
-  asteroid: '#5a5048',
-  comet: '#4a6b7c',
-  probe: '#8b4513',
+  star: '#ffff00',
+  planet: '#ffffff',
+  dwarf: '#888888',
+  moon: '#aaaaaa',
+  asteroid: '#666666',
+  comet: '#66ccff',
+  probe: '#ff6666',
 };
 
-// Specific planet colors (muted earth tones)
+// Simple planet colors
 export const PLANET_COLORS: Record<string, string> = {
-  mercury: '#9a8b7a',
-  venus: '#c9b896',
-  earth: '#6b8e7a',
-  mars: '#a67b5b',
-  jupiter: '#b8a082',
-  saturn: '#c9b896',
-  uranus: '#7a9b9a',
-  neptune: '#5a7b8a',
+  mercury: '#999999',
+  venus: '#ffcc66',
+  earth: '#3399ff',
+  mars: '#ff4444',
+  jupiter: '#ffaa66',
+  saturn: '#ffdd88',
+  uranus: '#66ffff',
+  neptune: '#4466ff',
 };

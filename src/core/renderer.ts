@@ -19,9 +19,8 @@ export class Renderer {
   // Body lookup map for parent occlusion checks
   private bodyMap: Map<string, CelestialBody> = new Map();
 
-  // Parchment colors
-  private readonly bgColor = '#f4e4c1';
-  private readonly labelColor = '#2c2c2c';
+  private readonly bgColor = '#000000';
+  private readonly labelColor = '#cccccc';
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.ctx = canvas.getContext('2d')!;
@@ -166,15 +165,14 @@ export class Renderer {
     // Skip entirely if nothing visible
     if (!anyVisible) return;
 
-    // Apply occlusion opacity to the orbit color
-    const baseOpacity = 0.3; // From orbitColor rgba
+    // Apply occlusion opacity to the orbit color (muted version of body color)
+    const baseOpacity = 0.35;
     this.ctx.globalAlpha = baseOpacity * occlusionOpacity;
 
-    // Draw the orbit, but only move/line to visible segments
+    // Draw the orbit with a muted version of the body's color
     this.ctx.beginPath();
-    this.ctx.strokeStyle = 'rgb(61, 61, 61)';
-    this.ctx.lineWidth = 1;
-    this.ctx.setLineDash([4, 4]);
+    this.ctx.strokeStyle = body.color;
+    this.ctx.lineWidth = 2;
 
     let needsMove = true;
     for (let i = 0; i < screenPoints.length; i++) {
@@ -204,12 +202,11 @@ export class Renderer {
     }
 
     this.ctx.stroke();
-    this.ctx.setLineDash([]);
     this.ctx.globalAlpha = 1;
   }
 
   renderLabel(text: string, x: number, y: number, opacity: number = 1): void {
-    this.ctx.font = '12px "Crimson Text", Georgia, serif';
+    this.ctx.font = '11px "Space Mono", monospace';
     this.ctx.fillStyle = this.labelColor;
     this.ctx.textAlign = 'center';
     this.ctx.globalAlpha = 0.7 * opacity;

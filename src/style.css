@@ -1,11 +1,9 @@
-/* Parchment/LEMMINO aesthetic */
+/* Dark space aesthetic */
 :root {
-  --parchment: #f4e4c1;
-  --parchment-dark: #e8d4a8;
-  --ink: #2c2c2c;
-  --ink-light: #3d3d3d;
-  --sun-gold: #d4a574;
-  --accent: #8b4513;
+  --bg: #000000;
+  --text: #cccccc;
+  --text-dim: #888888;
+  --accent: #66ccff;
 }
 
 * {
@@ -15,10 +13,10 @@
 }
 
 body {
-  background: var(--parchment);
-  font-family: 'Crimson Text', Georgia, serif;
+  background: var(--bg);
+  font-family: 'Space Mono', monospace;
   overflow: hidden;
-  color: var(--ink);
+  color: var(--text);
 }
 
 #canvas {
@@ -45,10 +43,11 @@ body {
 }
 
 #date-display {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 400;
-  letter-spacing: 0.05em;
-  color: var(--ink);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
   opacity: 0.8;
 }
 
@@ -61,8 +60,8 @@ body {
 
 #controls button {
   background: transparent;
-  border: 1px solid var(--ink-light);
-  color: var(--ink);
+  border: 1px solid var(--text-dim);
+  color: var(--text);
   font-family: inherit;
   font-size: 14px;
   padding: 8px 12px;
