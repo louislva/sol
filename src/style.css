@@ -1,0 +1,85 @@
+/* Parchment/LEMMINO aesthetic */
+:root {
+  --parchment: #f4e4c1;
+  --parchment-dark: #e8d4a8;
+  --ink: #2c2c2c;
+  --ink-light: #3d3d3d;
+  --sun-gold: #d4a574;
+  --accent: #8b4513;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--parchment);
+  font-family: 'Crimson Text', Georgia, serif;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+#canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: grab;
+}
+
+#canvas:active {
+  cursor: grabbing;
+}
+
+#ui {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+#date-display {
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  opacity: 0.8;
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+#controls button {
+  background: transparent;
+  border: 1px solid var(--ink-light);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+}
+
+#controls button:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#speed-display {
+  font-size: 14px;
+  min-width: 60px;
+  text-align: center;
+  opacity: 0.7;
+}
