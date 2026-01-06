@@ -120,8 +120,10 @@ export function calculatePosition(
   // Mean anomaly
   let M = L - longPeri;
 
-  // Normalize to 0-360
-  M = ((M % 360) + 360) % 360;
+  // Only normalize for elliptical orbits - hyperbolic orbits need unbounded M
+  if (e < 1) {
+    M = ((M % 360) + 360) % 360;
+  }
   M = deg2rad(M);
 
   // Solve Kepler's equation
