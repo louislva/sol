@@ -34,6 +34,7 @@ console.log(`Loaded ${asteroidBelt.count} asteroids`);
 const dateDisplay = document.getElementById('date-display')!;
 const currentSpeedEl = document.getElementById('current-speed')!;
 const zoomLevelEl = document.getElementById('zoom-level')!;
+const orbitResolutionEl = document.getElementById('orbit-resolution')!;
 const speedButtons = document.querySelectorAll('.speed-option') as NodeListOf<HTMLButtonElement>;
 
 // Set up speed selector
@@ -146,8 +147,9 @@ function animate(): void {
 
   // Update UI
   dateDisplay.textContent = time.formatDate();
-  currentSpeedEl.textContent = `speed ${time.timeScale}`;
+  currentSpeedEl.textContent = `speed ${time.timeScale.toFixed(0)}`;
   zoomLevelEl.textContent = `zoom ${camera.zoom.toExponential(1)}`;
+  orbitResolutionEl.textContent = `${renderer.getOrbitResolution()} pts`;
 
   requestAnimationFrame(animate);
 }

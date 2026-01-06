@@ -7,6 +7,7 @@ import { AsteroidBelt } from '../astronomy/asteroidBelt';
 interface OrbitCache {
   points: Array<{ x: number; y: number }>;
   julianDate: number;
+  numPoints: number;
 }
 
 export class Renderer {
@@ -190,17 +191,31 @@ export class Renderer {
     }
   }
 
+  // Calculate orbit resolution based on zoom level
+  getOrbitResolution(): number {
+    const zoom = this.camera.zoom;
+    // More points when zoomed in for smoother curves
+    if (zoom > 1e-4) return 720;
+    if (zoom > 1e-5) return 360;
+    if (zoom > 1e-6) return 180;
+    if (zoom > 1e-7) return 90;
+    return 60;
+  }
+
   private getOrbitPoints(body: CelestialBody, julianDate: number): Array<{ x: number; y: number }> {
+    const numPoints = this.getOrbitResolution();
     const cached = this.orbitCache.get(body.name);
 
-    // Use cache if fresh enough
-    if (cached && Math.abs(cached.julianDate - julianDate) < this.CACHE_DURATION) {
+    // Use cache if fresh enough and resolution matches
+    if (cached &&
+        Math.abs(cached.julianDate - julianDate) < this.CACHE_DURATION &&
+        cached.numPoints === numPoints) {
       return cached.points;
     }
 
     // Recalculate and cache
-    const points = getOrbitPath(body, julianDate, 180);
-    this.orbitCache.set(body.name, { points, julianDate });
+    const points = getOrbitPath(body, julianDate, numPoints);
+    this.orbitCache.set(body.name, { points, julianDate, numPoints });
     return points;
   }
 
