@@ -61,20 +61,14 @@ function getAutoSpeed(zoom: number): number {
 
   let logSpeed: number;
 
-  if (logZoom >= p1.z) {
-    // More zoomed in than p1 - clamp to realtime
-    logSpeed = p1.s;
-  } else if (logZoom >= p2.z) {
-    // Between p1 and p2
+  if (logZoom >= p2.z) {
+    // At or above p2 - use p1-p2 line (extrapolates beyond p1)
     const t = (logZoom - p1.z) / (p2.z - p1.z);
     logSpeed = p1.s + t * (p2.s - p1.s);
-  } else if (logZoom >= p3.z) {
-    // Between p2 and p3
+  } else {
+    // At or below p2 - use p2-p3 line (extrapolates beyond p3)
     const t = (logZoom - p2.z) / (p3.z - p2.z);
     logSpeed = p2.s + t * (p3.s - p2.s);
-  } else {
-    // More zoomed out than p3 - clamp to max
-    logSpeed = p3.s;
   }
 
   return Math.exp(logSpeed);
