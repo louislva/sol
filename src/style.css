@@ -83,3 +83,10 @@ body {
   background: rgba(255, 255, 255, 0.15);
   color: var(--text);
 }
+
+#speed-indicator {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.6;
+  letter-spacing: 0.05em;
+}

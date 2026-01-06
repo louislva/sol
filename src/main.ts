@@ -32,7 +32,19 @@ console.log(`Loaded ${asteroidBelt.count} asteroids`);
 
 // UI elements
 const dateDisplay = document.getElementById('date-display')!;
+const speedIndicator = document.getElementById('speed-indicator')!;
 const speedButtons = document.querySelectorAll('.speed-option') as NodeListOf<HTMLButtonElement>;
+
+// Format time scale for display
+function formatSpeed(scale: number): string {
+  if (scale < 60) return `${scale}x`;
+  if (scale < 3600) return `${Math.round(scale / 60)} min/s`;
+  if (scale < 86400) return `${Math.round(scale / 3600)} hr/s`;
+  if (scale < 604800) return `${Math.round(scale / 86400)} day/s`;
+  if (scale < 2592000) return `${Math.round(scale / 604800)} wk/s`;
+  if (scale < 31536000) return `${Math.round(scale / 2592000)} mo/s`;
+  return `${Math.round(scale / 31536000)} yr/s`;
+}
 
 // Set up speed selector
 speedButtons.forEach(btn => {
@@ -139,6 +151,7 @@ function animate(): void {
 
   // Update UI
   dateDisplay.textContent = time.formatDate();
+  speedIndicator.textContent = formatSpeed(time.timeScale);
 
   requestAnimationFrame(animate);
 }
