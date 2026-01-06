@@ -1,4 +1,11 @@
-import { type OrbitalElements, calculatePosition, calculateOrbitPath } from './kepler';
+import {
+  type OrbitalElements,
+  type ParentCentricElements,
+  calculatePosition,
+  calculateOrbitPath,
+  calculateParentCentricPosition,
+  calculateParentCentricOrbitPath,
+} from './kepler';
 import { type BodyType, PLANET_COLORS, BODY_COLORS } from './constants';
 
 export interface CelestialBody {
@@ -18,6 +25,8 @@ export interface CelestialBody {
   // Parent body name (e.g., 'Sun' for planets, 'Earth' for Moon)
   // If not specified, defaults to 'Sun' for orbiting bodies
   parentName?: string;
+  // For moons/satellites: orbital elements relative to parent (in km)
+  parentCentricElements?: ParentCentricElements;
 }
 
 // Get orbital elements for a given date (handles segmented orbits)
@@ -44,6 +53,14 @@ function getElementsForDate(body: CelestialBody, julianDate: number): OrbitalEle
   return null;
 }
 
+// Body lookup map for hierarchical position resolution
+let globalBodyMap: Map<string, CelestialBody> = new Map();
+
+// Set the global body map (called by renderer before position calculations)
+export function setBodyMap(bodies: CelestialBody[]): void {
+  globalBodyMap = new Map(bodies.map(b => [b.name, b]));
+}
+
 // Calculate position of a body at a given Julian date
 export function getBodyPosition(
   body: CelestialBody,
@@ -53,6 +70,20 @@ export function getBodyPosition(
     return body.fixedPosition;
   }
 
+  // Handle parent-centric bodies (moons, satellites)
+  if (body.parentCentricElements && body.parentName) {
+    const parent = globalBodyMap.get(body.parentName);
+    if (parent) {
+      const parentPos = getBodyPosition(parent, julianDate);
+      const relativePos = calculateParentCentricPosition(body.parentCentricElements, julianDate);
+      return {
+        x: parentPos.x + relativePos.x,
+        y: parentPos.y + relativePos.y,
+      };
+    }
+  }
+
+  // Heliocentric bodies (planets, comets, asteroids)
   const elements = getElementsForDate(body, julianDate);
   if (!elements) {
     return { x: 0, y: 0 };
@@ -67,6 +98,21 @@ export function getOrbitPath(
   julianDate: number,
   numPoints?: number
 ): Array<{ x: number; y: number }> {
+  // Handle parent-centric bodies (moons, satellites)
+  if (body.parentCentricElements && body.parentName) {
+    const parent = globalBodyMap.get(body.parentName);
+    if (parent) {
+      const parentPos = getBodyPosition(parent, julianDate);
+      const relativePath = calculateParentCentricOrbitPath(body.parentCentricElements, numPoints);
+      // Offset all points by parent position
+      return relativePath.map(p => ({
+        x: parentPos.x + p.x,
+        y: parentPos.y + p.y,
+      }));
+    }
+  }
+
+  // Heliocentric bodies
   const elements = getElementsForDate(body, julianDate);
   if (!elements) {
     return [];
@@ -261,8 +307,101 @@ export const planets: CelestialBody[] = [
   Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune
 ];
 
+// Dwarf planets
+// Data from NASA JPL
+
+export const Pluto: CelestialBody = {
+  name: 'Pluto',
+  type: 'dwarf',
+  radius: 1188.3,
+  color: '#aa9988', // Tan/brownish
+  elements: {
+    a: 39.48211675,
+    e: 0.24882730,
+    i: 17.14001206,
+    L: 238.92903833,
+    longPeri: 224.06891629,
+    longNode: 110.30393684,
+    aDot: -0.00031596,
+    eDot: 0.00005170,
+    iDot: 0.00004818,
+    LDot: 145.20780515,
+    longPeriDot: -0.04062942,
+    longNodeDot: -0.01183482,
+  },
+};
+
+export const Ceres: CelestialBody = {
+  name: 'Ceres',
+  type: 'dwarf',
+  radius: 473,
+  color: '#777777', // Gray
+  elements: {
+    a: 2.7691651545,
+    e: 0.0760090291,
+    i: 10.59406704,
+    L: 95.98917576,
+    longPeri: 73.59769469,  // longitude of perihelion
+    longNode: 80.30553156,
+    LDot: 78.21926063,      // degrees per century
+  },
+};
+
+export const Eris: CelestialBody = {
+  name: 'Eris',
+  type: 'dwarf',
+  radius: 1163,
+  color: '#dddddd', // Bright gray/white
+  elements: {
+    a: 67.864,
+    e: 0.44068,
+    i: 44.040,
+    L: 204.16,
+    longPeri: 151.639,
+    longNode: 35.951,
+    LDot: 0.6418,           // Very slow
+  },
+};
+
+export const Makemake: CelestialBody = {
+  name: 'Makemake',
+  type: 'dwarf',
+  radius: 715,
+  color: '#cc9966', // Reddish-brown
+  elements: {
+    a: 45.430,
+    e: 0.16126,
+    i: 28.9835,
+    L: 165.514,
+    longPeri: 297.240,
+    longNode: 79.620,
+    LDot: 1.1615,
+  },
+};
+
+export const Haumea: CelestialBody = {
+  name: 'Haumea',
+  type: 'dwarf',
+  radius: 816,               // Mean radius (elongated shape)
+  color: '#eeeeee',          // Very bright
+  elements: {
+    a: 43.182,
+    e: 0.19642,
+    i: 28.2137,
+    L: 218.205,
+    longPeri: 240.208,
+    longNode: 122.167,
+    LDot: 1.2791,
+  },
+};
+
+export const dwarfPlanets: CelestialBody[] = [
+  Pluto, Ceres, Eris, Makemake, Haumea
+];
+
 // All bodies (will expand later with dwarf planets, moons, etc.)
 export const allBodies: CelestialBody[] = [
   Sun,
   ...planets,
+  ...dwarfPlanets,
 ];
