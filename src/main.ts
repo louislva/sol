@@ -92,7 +92,7 @@ moonButtons.forEach(btn => {
 
 // Calculate auto speed based on zoom level
 // Interpolates in log-log space between these points:
-// zoom 6.4e-5 → 1, zoom 2.7e-6 → 86400, zoom 1.2e-7 → 31536000
+// zoom 6.4e-5 → 1, zoom 2.7e-6 → 86400, zoom 1.2e-7 → 31536000, zoom 3.8e-12 → 315360000000
 function getAutoSpeed(zoom: number): number {
   const logZoom = Math.log(zoom);
 
@@ -100,6 +100,7 @@ function getAutoSpeed(zoom: number): number {
   const p1 = { z: -9.66, s: 0 };        // 6.4e-5 → 1
   const p2 = { z: -12.82, s: 11.37 };   // 2.7e-6 → 86400
   const p3 = { z: -15.94, s: 17.27 };   // 1.2e-7 → 31536000
+  const p4 = { z: -26.30, s: 26.48 };   // 3.8e-12 → 315360000000
 
   let logSpeed: number;
 
@@ -107,10 +108,14 @@ function getAutoSpeed(zoom: number): number {
     // At or above p2 - use p1-p2 line (extrapolates beyond p1)
     const t = (logZoom - p1.z) / (p2.z - p1.z);
     logSpeed = p1.s + t * (p2.s - p1.s);
-  } else {
-    // At or below p2 - use p2-p3 line (extrapolates beyond p3)
+  } else if (logZoom >= p3.z) {
+    // Between p2 and p3 - use p2-p3 line
     const t = (logZoom - p2.z) / (p3.z - p2.z);
     logSpeed = p2.s + t * (p3.s - p2.s);
+  } else {
+    // At or below p3 - use p3-p4 line (extrapolates beyond p4)
+    const t = (logZoom - p3.z) / (p4.z - p3.z);
+    logSpeed = p3.s + t * (p4.s - p3.s);
   }
 
   const maxSpeed = 10000 * 31536000; // 10000 years per second

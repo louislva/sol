@@ -177,11 +177,11 @@ const SPACECRAFT_CATALOG: Array<{
 
   // === HISTORICAL MISSIONS (ENDED) ===
 
-  // Pioneer Program
+  // Pioneer Program (still traveling on escape trajectories, just lost contact)
   { spkid: -23, name: 'Pioneer 10', type: 'deep_space', status: 'ended', iconType: 'probe',
-    launchDate: '1972-03-03', endDate: '2003-01-23', center: '500@10' },
+    launchDate: '1972-03-03', center: '500@10' },
   { spkid: -24, name: 'Pioneer 11', type: 'deep_space', status: 'ended', iconType: 'probe',
-    launchDate: '1973-04-06', endDate: '1995-11-24', center: '500@10' },
+    launchDate: '1973-04-06', center: '500@10' },
 
   // Cassini-Huygens (Saturn)
   { spkid: -82, name: 'Cassini', type: 'planetary_orbiter', status: 'ended', iconType: 'orbiter',
