@@ -239,6 +239,7 @@ export class Renderer {
 
   renderOrbit(body: CelestialBody, julianDate: number): void {
     if (body.type === 'star') return;
+    if (body.hideOrbit) return;
 
     // Get opacity based on parent occlusion (fade out near parent)
     const occlusionOpacity = this.getParentOcclusionOpacity(body, julianDate);

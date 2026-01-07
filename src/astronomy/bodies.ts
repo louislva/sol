@@ -45,6 +45,9 @@ export interface CelestialBody {
   launchJD?: number;                 // Mission start (Julian date)
   endJD?: number;                    // Mission end (Julian date, optional)
   iconType?: SpacecraftIconType;     // Which icon to render
+
+  // Display options
+  hideOrbit?: boolean;               // Don't render orbit path
 }
 
 // Get orbital elements for a given date (handles segmented orbits)

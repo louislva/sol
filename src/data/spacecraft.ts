@@ -52,6 +52,15 @@ interface SpacecraftJsonData {
   }>;
 }
 
+// Spacecraft that should not show orbit lines (too far/hyperbolic)
+const HIDE_ORBIT_SPACECRAFT = new Set([
+  'Voyager 1',
+  'Voyager 2',
+  'New Horizons',
+  'Pioneer 10',
+  'Pioneer 11',
+]);
+
 // Storage for loaded data
 let spacecraftData: SpacecraftJsonData | null = null;
 let allSpacecraftCache: CelestialBody[] | null = null;
@@ -75,6 +84,9 @@ function spacecraftToCelestialBody(
     launchJD: craft.launchJD,
     endJD: craft.endJD,
     iconType: craft.iconType,
+
+    // Hide orbits for interstellar/distant spacecraft
+    hideOrbit: HIDE_ORBIT_SPACECRAFT.has(craft.name),
   };
 
   // Add orbital elements
