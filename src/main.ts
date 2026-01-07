@@ -153,7 +153,7 @@ function getAutoSpeed(zoom: number): number {
     logSpeed = p3.s + t * (p4.s - p3.s);
   }
 
-  const maxSpeed = 10000 * 31536000; // 10000 years per second
+  const maxSpeed = 5 * 31536000; // 5 years per second
   const minSpeed = 1; // Minimum 1 second per second (realtime)
   return Math.max(minSpeed, Math.min(Math.exp(logSpeed), maxSpeed));
 }
