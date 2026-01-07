@@ -19,7 +19,7 @@ export const HalleysComet: CelestialBody = {
     L: 111.33,          // Mean longitude at epoch
     longPeri: 111.33,   // Longitude of perihelion
     longNode: 58.42,    // Longitude of ascending node
-    LDot: 4.73,         // degrees per century (76 year period)
+    LDot: 473,          // degrees per century (76 year period)
   },
 };
 
@@ -38,7 +38,7 @@ export const HaleBopp: CelestialBody = {
     L: 130.6,
     longPeri: 130.6,
     longNode: 282.5,
-    LDot: 0.142,        // Very slow
+    LDot: 14.2,         // Very slow (2533 year period)
   },
 };
 
@@ -56,7 +56,7 @@ export const Encke: CelestialBody = {
     L: 186.5,
     longPeri: 186.5,
     longNode: 334.6,
-    LDot: 109.1,        // degrees per century (3.3 year period)
+    LDot: 10910,        // degrees per century (3.3 year period)
   },
 };
 
@@ -74,7 +74,7 @@ export const Tempel1: CelestialBody = {
     L: 68.9,
     longPeri: 68.9,
     longNode: 68.9,
-    LDot: 65.1,         // ~5.5 year period
+    LDot: 6510,         // ~5.5 year period
   },
 };
 
@@ -92,7 +92,7 @@ export const ChuryumovGerasimenko: CelestialBody = {
     L: 50.1,
     longPeri: 12.8,
     longNode: 50.1,
-    LDot: 55.3,         // ~6.5 year period
+    LDot: 5530,         // ~6.5 year period
   },
 };
 
@@ -111,7 +111,7 @@ export const NEOWISE: CelestialBody = {
     L: 61.0,
     longPeri: 61.0,
     longNode: 61.0,
-    LDot: 0.053,
+    LDot: 5.3,          // ~6800 year period
   },
 };
 
@@ -129,7 +129,7 @@ export const Wild2: CelestialBody = {
     L: 41.7,
     longPeri: 41.7,
     longNode: 136.0,
-    LDot: 56.2,         // ~6.4 year period
+    LDot: 5620,         // ~6.4 year period
   },
 };
 
@@ -147,7 +147,7 @@ export const Borrelly: CelestialBody = {
     L: 353.3,
     longPeri: 353.3,
     longNode: 75.3,
-    LDot: 52.5,         // ~6.9 year period
+    LDot: 5250,         // ~6.9 year period
   },
 };
 
