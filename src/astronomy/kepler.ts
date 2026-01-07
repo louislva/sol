@@ -38,12 +38,33 @@ function solveKepler(M: number, e: number, tolerance: number = 1e-8): number {
     return solveKeplerHyperbolic(M, e, tolerance);
   }
 
-  // Initial guess
-  let E = M;
+  // Use tighter tolerance for high-eccentricity orbits to avoid position glitches
+  if (e > 0.9) {
+    tolerance = 1e-12;
+  }
+
+  // Better initial guess for high-eccentricity orbits
+  // Standard: E = M works for low e
+  // High e: E = M + e*sin(M)*(1 + e*cos(M)) is much better
+  let E: number;
+  if (e > 0.8) {
+    const sinM = Math.sin(M);
+    const cosM = Math.cos(M);
+    E = M + e * sinM * (1 + e * cosM);
+  } else {
+    E = M;
+  }
 
   // Newton-Raphson iteration
-  for (let i = 0; i < 50; i++) {
-    const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  for (let i = 0; i < 100; i++) {
+    const sinE = Math.sin(E);
+    const cosE = Math.cos(E);
+    const denom = 1 - e * cosE;
+
+    // Avoid division by zero
+    if (Math.abs(denom) < 1e-15) break;
+
+    const dE = (E - e * sinE - M) / denom;
     E -= dE;
     if (Math.abs(dE) < tolerance) break;
   }
@@ -81,12 +102,26 @@ function calculateOrbitalPosition(a: number, e: number, E: number): { x: number;
   if (e > 1) {
     // Hyperbolic orbit
     const x = a * (e - Math.cosh(E));
-    const y = a * Math.sqrt(e * e - 1) * Math.sinh(E);
+    // Use Math.max to handle floating-point errors that could make e*e - 1 negative
+    const y = a * Math.sqrt(Math.max(0, e * e - 1)) * Math.sinh(E);
     return { x, y };
   } else {
     // Elliptical orbit
-    const x = a * (Math.cos(E) - e);
-    const y = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const cosE = Math.cos(E);
+    const sinE = Math.sin(E);
+    const x = a * (cosE - e);
+
+    // For high eccentricity (e > 0.99), compute semi-minor axis b more carefully
+    // b = a * sqrt(1 - e²) can lose precision when e ≈ 1
+    // Use: b = a * sqrt((1-e)*(1+e)) for better numerical stability
+    let b: number;
+    if (e > 0.99) {
+      b = a * Math.sqrt((1 - e) * (1 + e));
+    } else {
+      b = a * Math.sqrt(1 - e * e);
+    }
+
+    const y = b * sinE;
     return { x, y };
   }
 }
@@ -190,29 +225,46 @@ export function calculateParentCentricOrbitPath(
   numPoints: number = 180
 ): Array<{ x: number; y: number }> {
   const points: Array<{ x: number; y: number }> = [];
+  const e = elements.e;
+
+  // Pre-compute semi-latus rectum p = a * (1 - e²) for numerical stability
+  let p: number;
+  if (e > 0.99) {
+    p = elements.a * (1 - e) * (1 + e);
+  } else if (e > 1) {
+    p = elements.a * (e * e - 1);
+  } else {
+    p = elements.a * (1 - e * e);
+  }
 
   // For hyperbolic orbits, only draw the visible portion
-  const maxAngle = elements.e > 1 ? Math.acos(-1 / elements.e) * 0.95 : Math.PI;
+  const maxAngle = e > 1 ? Math.acos(-1 / e) * 0.95 : Math.PI;
+
+  // Pre-compute rotation angle
+  const angle = deg2rad(elements.omega + elements.Omega);
+  const cosAngle = Math.cos(angle);
+  const sinAngle = Math.sin(angle);
 
   for (let j = 0; j <= numPoints; j++) {
     // True anomaly from -maxAngle to +maxAngle
     const nu = (j / numPoints) * 2 * maxAngle - maxAngle;
 
-    // Distance from focus
-    const r = elements.a * (1 - elements.e * elements.e) / (1 + elements.e * Math.cos(nu));
+    // Distance from focus using pre-computed semi-latus rectum
+    const cosNu = Math.cos(nu);
+    const denom = 1 + e * cosNu;
+
+    // Skip points where denominator is too close to zero
+    if (Math.abs(denom) < 1e-10) continue;
+
+    const r = p / denom;
 
     if (r < 0 || !isFinite(r)) continue;
 
     // Position in orbital plane (km)
     const orbitalPos = {
-      x: r * Math.cos(nu),
+      x: r * cosNu,
       y: r * Math.sin(nu),
     };
-
-    // Rotate to reference plane
-    const angle = deg2rad(elements.omega + elements.Omega);
-    const cosAngle = Math.cos(angle);
-    const sinAngle = Math.sin(angle);
 
     points.push({
       x: orbitalPos.x * cosAngle - orbitalPos.y * sinAngle,
@@ -239,6 +291,17 @@ export function calculateOrbitPath(
   const longPeri = elements.longPeri + (elements.longPeriDot || 0) * T;
   const longNode = elements.longNode + (elements.longNodeDot || 0) * T;
 
+  // Pre-compute semi-latus rectum p = a * (1 - e²) for numerical stability
+  // For high eccentricity, use p = a * (1-e) * (1+e) to avoid catastrophic cancellation
+  let p: number;
+  if (e > 0.99) {
+    p = a * (1 - e) * (1 + e);
+  } else if (e > 1) {
+    p = a * (e * e - 1); // Hyperbolic: negative a, so p > 0
+  } else {
+    p = a * (1 - e * e);
+  }
+
   // For hyperbolic orbits, only draw the visible portion
   const maxAngle = e > 1 ? Math.acos(-1/e) * 0.95 : Math.PI;
 
@@ -246,14 +309,20 @@ export function calculateOrbitPath(
     // True anomaly from -maxAngle to +maxAngle
     const nu = (j / numPoints) * 2 * maxAngle - maxAngle;
 
-    // Distance from focus
-    const r = a * (1 - e * e) / (1 + e * Math.cos(nu));
+    // Distance from focus using pre-computed semi-latus rectum
+    const cosNu = Math.cos(nu);
+    const denom = 1 + e * cosNu;
+
+    // Skip points where denominator is too close to zero (near asymptote)
+    if (Math.abs(denom) < 1e-10) continue;
+
+    const r = p / denom;
 
     if (r < 0 || !isFinite(r)) continue;
 
     // Position in orbital plane
     const orbitalPos = {
-      x: r * Math.cos(nu),
+      x: r * cosNu,
       y: r * Math.sin(nu),
     };
 

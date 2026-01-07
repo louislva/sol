@@ -1,7 +1,15 @@
-import { Camera } from './camera';
-import { type CelestialBody, getBodyPosition, getOrbitPath, setBodyMap } from '../astronomy/bodies';
-import { MIN_DISPLAY_SIZE, type SpacecraftIconType } from '../astronomy/constants';
-import { AsteroidBelt } from '../astronomy/asteroidBelt';
+import { Camera } from "./camera";
+import {
+  type CelestialBody,
+  getBodyPosition,
+  getOrbitPath,
+  setBodyMap,
+} from "../astronomy/bodies";
+import {
+  MIN_DISPLAY_SIZE,
+  type SpacecraftIconType,
+} from "../astronomy/constants";
+import { AsteroidBelt } from "../astronomy/asteroidBelt";
 
 // Cached orbit data
 interface OrbitCache {
@@ -27,11 +35,11 @@ export class Renderer {
   // Currently selected body name (clicked)
   private selectedBodyName: string | null = null;
 
-  private readonly bgColor = '#000000';
-  private readonly labelColor = '#cccccc';
+  private readonly bgColor = "#000000";
+  private readonly labelColor = "#cccccc";
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
-    this.ctx = canvas.getContext('2d')!;
+    this.ctx = canvas.getContext("2d")!;
     this.camera = camera;
   }
 
@@ -56,17 +64,22 @@ export class Renderer {
     const ng = Math.round(g + (255 - g) * factor);
     const nb = Math.round(b + (255 - b) * factor);
 
-    return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+    return `#${nr.toString(16).padStart(2, "0")}${ng
+      .toString(16)
+      .padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`;
   }
 
   // Check visibility of a body relative to its parent's minimum display size
   // Returns opacity: 0 = fully hidden, 1 = fully visible
-  private getParentOcclusionOpacity(body: CelestialBody, julianDate: number): number {
+  private getParentOcclusionOpacity(
+    body: CelestialBody,
+    julianDate: number
+  ): number {
     // Stars have no parent
-    if (body.type === 'star' || body.fixedPosition) return 1;
+    if (body.type === "star" || body.fixedPosition) return 1;
 
     // Get parent body (default to Sun for planets)
-    const parentName = body.parentName || 'Sun';
+    const parentName = body.parentName || "Sun";
     const parent = this.bodyMap.get(parentName);
     if (!parent) return 1;
 
@@ -88,7 +101,7 @@ export class Renderer {
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     // Fade out as body approaches parent's edge (16px for sun, 4px for others)
-    const fadeDistance = parent.type === 'star' ? 16 : 4;
+    const fadeDistance = parent.type === "star" ? 16 : 4;
     const fadeStart = parentRadiusPixels + fadeDistance;
 
     if (distance >= fadeStart) return 1; // Fully visible
@@ -99,10 +112,13 @@ export class Renderer {
   }
 
   // Separate opacity calculation for labels - fades earlier (24px from any parent)
-  private getLabelOcclusionOpacity(body: CelestialBody, julianDate: number): number {
-    if (body.type === 'star' || body.fixedPosition) return 1;
+  private getLabelOcclusionOpacity(
+    body: CelestialBody,
+    julianDate: number
+  ): number {
+    if (body.type === "star" || body.fixedPosition) return 1;
 
-    const parentName = body.parentName || 'Sun';
+    const parentName = body.parentName || "Sun";
     const parent = this.bodyMap.get(parentName);
     if (!parent) return 1;
 
@@ -120,7 +136,7 @@ export class Renderer {
     const dy = bodyScreen.y - parentScreen.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    const fadeEnd = parentRadiusPixels + 32;   // Fully hidden at 32px from edge
+    const fadeEnd = parentRadiusPixels + 32; // Fully hidden at 32px from edge
     const fadeStart = parentRadiusPixels + 64; // Start fading at 64px from edge
 
     if (distance >= fadeStart) return 1;
@@ -169,12 +185,19 @@ export class Renderer {
     // Check if this body is hovered or selected
     const isHovered = body.name === this.hoveredBodyName;
     const isSelected = body.name === this.selectedBodyName;
-    const displayColor = (isHovered || isSelected) ? this.brightenColor(body.color) : body.color;
+    const displayColor =
+      isHovered || isSelected ? this.brightenColor(body.color) : body.color;
 
     // Draw probe/satellite with special icon based on type
-    if (body.type === 'probe') {
-      const iconType = body.iconType || 'probe';
-      this.renderSpacecraftIcon(screenPos.x, screenPos.y, radiusPixels, displayColor, iconType);
+    if (body.type === "probe") {
+      const iconType = body.iconType || "probe";
+      this.renderSpacecraftIcon(
+        screenPos.x,
+        screenPos.y,
+        radiusPixels,
+        displayColor,
+        iconType
+      );
     } else {
       // Draw the body as circle
       this.ctx.beginPath();
@@ -183,8 +206,8 @@ export class Renderer {
       this.ctx.fill();
 
       // Add a subtle stroke for definition
-      if (body.type !== 'star') {
-        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+      if (body.type !== "star") {
+        this.ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
         this.ctx.lineWidth = 0.5;
         this.ctx.stroke();
       }
@@ -205,29 +228,57 @@ export class Renderer {
     // Draw label if body is at minimum size (contextual visibility)
     if (radiusPixels <= minSize * 1.5) {
       const labelOpacity = this.getLabelOcclusionOpacity(body, julianDate);
-      this.renderLabel(body.name, screenPos.x, screenPos.y + radiusPixels + 12, labelOpacity);
+      this.renderLabel(
+        body.name,
+        screenPos.x,
+        screenPos.y + radiusPixels + 12,
+        labelOpacity
+      );
     }
   }
 
   // Calculate orbit resolution based on zoom level
-  getOrbitResolution(): number {
+  getOrbitResolution(eccentricity: number = 0): number {
     const zoom = this.camera.zoom;
+
+    // Base resolution from zoom level
     // More points when zoomed in for smoother curves
-    if (zoom > 1e-4) return 720;
-    if (zoom > 1e-5) return 360;
-    if (zoom > 1e-6) return 180;
-    if (zoom > 1e-7) return 90;
-    return 60;
+    // Beyond 1e-8, increase again since fewer orbits are rendered at far zoom
+    let baseResolution: number;
+    if (zoom > 1e-4) baseResolution = 720;
+    else if (zoom > 1e-5) baseResolution = 360;
+    else if (zoom > 1e-6) baseResolution = 180;
+    else if (zoom > 1e-7) baseResolution = 90;
+    else if (zoom > 1e-8) baseResolution = 360;
+    else if (zoom > 1e-9)
+      baseResolution = 8000; // Far solar system - increase again
+    else baseResolution = 360; // Very far out - even more points
+
+    // For high-eccentricity orbits, increase resolution to keep aphelion smooth
+    if (eccentricity > 0.9) {
+      baseResolution = Math.max(baseResolution * 5);
+    } else if (eccentricity > 0.7) {
+      baseResolution = Math.max(baseResolution * 2.5);
+    }
+
+    return baseResolution;
   }
 
-  private getOrbitPoints(body: CelestialBody, julianDate: number): Array<{ x: number; y: number }> {
-    const numPoints = this.getOrbitResolution();
+  private getOrbitPoints(
+    body: CelestialBody,
+    julianDate: number
+  ): Array<{ x: number; y: number }> {
+    // Get eccentricity for resolution scaling
+    const eccentricity = body.elements?.e ?? body.parentCentricElements?.e ?? 0;
+    const numPoints = this.getOrbitResolution(eccentricity);
     const cached = this.orbitCache.get(body.name);
 
     // Use cache if fresh enough and resolution matches
-    if (cached &&
-        Math.abs(cached.julianDate - julianDate) < this.CACHE_DURATION &&
-        cached.numPoints === numPoints) {
+    if (
+      cached &&
+      Math.abs(cached.julianDate - julianDate) < this.CACHE_DURATION &&
+      cached.numPoints === numPoints
+    ) {
       return cached.points;
     }
 
@@ -238,7 +289,7 @@ export class Renderer {
   }
 
   renderOrbit(body: CelestialBody, julianDate: number): void {
-    if (body.type === 'star') return;
+    if (body.type === "star") return;
     if (body.hideOrbit) return;
 
     // Get opacity based on parent occlusion (fade out near parent)
@@ -255,8 +306,10 @@ export class Renderer {
     for (const point of orbitPoints) {
       const screen = this.camera.worldToScreen(point.x, point.y);
       const visible =
-        screen.x >= -1000 && screen.x <= this.camera.width + 1000 &&
-        screen.y >= -1000 && screen.y <= this.camera.height + 1000;
+        screen.x >= -1000 &&
+        screen.x <= this.camera.width + 1000 &&
+        screen.y >= -1000 &&
+        screen.y <= this.camera.height + 1000;
       screenPoints.push({ ...screen, visible });
       if (visible) anyVisible = true;
     }
@@ -277,7 +330,8 @@ export class Renderer {
     for (let i = 0; i < screenPoints.length; i++) {
       const point = screenPoints[i];
       const prevVisible = i > 0 && screenPoints[i - 1].visible;
-      const nextVisible = i < screenPoints.length - 1 && screenPoints[i + 1].visible;
+      const nextVisible =
+        i < screenPoints.length - 1 && screenPoints[i + 1].visible;
 
       // Draw this point if it's visible or adjacent to a visible point
       if (point.visible || prevVisible || nextVisible) {
@@ -308,7 +362,7 @@ export class Renderer {
   renderLabel(text: string, x: number, y: number, opacity: number = 1): void {
     this.ctx.font = '11px "Space Mono", monospace';
     this.ctx.fillStyle = this.labelColor;
-    this.ctx.textAlign = 'center';
+    this.ctx.textAlign = "center";
     this.ctx.globalAlpha = 0.7 * opacity;
     this.ctx.fillText(text, x, y);
     this.ctx.globalAlpha = 1;
@@ -323,16 +377,16 @@ export class Renderer {
     iconType: SpacecraftIconType
   ): void {
     switch (iconType) {
-      case 'telescope':
+      case "telescope":
         this.renderTelescopeIcon(x, y, size, color);
         break;
-      case 'orbiter':
+      case "orbiter":
         this.renderOrbiterIcon(x, y, size, color);
         break;
-      case 'rover':
+      case "rover":
         this.renderRoverIcon(x, y, size, color);
         break;
-      case 'probe':
+      case "probe":
       default:
         this.renderProbeIcon(x, y, size, color);
         break;
@@ -342,7 +396,12 @@ export class Renderer {
   // Draw probe/satellite icon: cylinder with 4 solar panels
   //   [■] [▬] [■]
   //   [■] [▬] [■]
-  private renderProbeIcon(x: number, y: number, size: number, color: string): void {
+  private renderProbeIcon(
+    x: number,
+    y: number,
+    size: number,
+    color: string
+  ): void {
     const s = Math.max(size, 2);
 
     this.ctx.fillStyle = color;
@@ -356,24 +415,59 @@ export class Renderer {
     const panelW = s * 0.6;
     const panelH = s * 0.35;
     const panelGap = s * 0.2;
-    const panelX = s * 0.9;  // Distance from center to panel
+    const panelX = s * 0.9; // Distance from center to panel
 
     // Left panels
-    this.ctx.fillRect(x - panelX - panelW / 2, y - panelGap / 2 - panelH, panelW, panelH);
-    this.ctx.fillRect(x - panelX - panelW / 2, y + panelGap / 2, panelW, panelH);
+    this.ctx.fillRect(
+      x - panelX - panelW / 2,
+      y - panelGap / 2 - panelH,
+      panelW,
+      panelH
+    );
+    this.ctx.fillRect(
+      x - panelX - panelW / 2,
+      y + panelGap / 2,
+      panelW,
+      panelH
+    );
 
     // Right panels
-    this.ctx.fillRect(x + panelX - panelW / 2, y - panelGap / 2 - panelH, panelW, panelH);
-    this.ctx.fillRect(x + panelX - panelW / 2, y + panelGap / 2, panelW, panelH);
+    this.ctx.fillRect(
+      x + panelX - panelW / 2,
+      y - panelGap / 2 - panelH,
+      panelW,
+      panelH
+    );
+    this.ctx.fillRect(
+      x + panelX - panelW / 2,
+      y + panelGap / 2,
+      panelW,
+      panelH
+    );
 
     // Arms (thin lines connecting body to panels)
-    this.ctx.fillRect(x - panelX + panelW / 2, y - 0.5, panelX - panelW / 2 - bodyW / 2, 1);
-    this.ctx.fillRect(x + bodyW / 2, y - 0.5, panelX - panelW / 2 - bodyW / 2, 1);
+    this.ctx.fillRect(
+      x - panelX + panelW / 2,
+      y - 0.5,
+      panelX - panelW / 2 - bodyW / 2,
+      1
+    );
+    this.ctx.fillRect(
+      x + bodyW / 2,
+      y - 0.5,
+      panelX - panelW / 2 - bodyW / 2,
+      1
+    );
   }
 
   // Draw telescope icon: cylinder with sunshield (hexagonal top)
   // Represents JWST, Hubble, Kepler, etc.
-  private renderTelescopeIcon(x: number, y: number, size: number, color: string): void {
+  private renderTelescopeIcon(
+    x: number,
+    y: number,
+    size: number,
+    color: string
+  ): void {
     const s = Math.max(size, 2);
     this.ctx.fillStyle = color;
 
@@ -384,9 +478,9 @@ export class Renderer {
 
     // Hexagonal sunshield at top (simplified as triangle)
     this.ctx.beginPath();
-    this.ctx.moveTo(x, y - bodyH / 2 - s * 0.5);  // Top point
-    this.ctx.lineTo(x - s * 0.6, y - bodyH / 2 + s * 0.2);  // Bottom left
-    this.ctx.lineTo(x + s * 0.6, y - bodyH / 2 + s * 0.2);  // Bottom right
+    this.ctx.moveTo(x, y - bodyH / 2 - s * 0.5); // Top point
+    this.ctx.lineTo(x - s * 0.6, y - bodyH / 2 + s * 0.2); // Bottom left
+    this.ctx.lineTo(x + s * 0.6, y - bodyH / 2 + s * 0.2); // Bottom right
     this.ctx.closePath();
     this.ctx.fill();
 
@@ -397,22 +491,32 @@ export class Renderer {
     this.ctx.fillRect(x + s * 0.7 - panelW / 2, y, panelW, panelH);
 
     // Panel arms
-    this.ctx.fillRect(x - s * 0.7 + panelW / 2, y + panelH / 2 - 0.5, s * 0.3, 1);
+    this.ctx.fillRect(
+      x - s * 0.7 + panelW / 2,
+      y + panelH / 2 - 0.5,
+      s * 0.3,
+      1
+    );
     this.ctx.fillRect(x + bodyW / 2, y + panelH / 2 - 0.5, s * 0.3, 1);
   }
 
   // Draw orbiter icon: diamond/angular spacecraft shape
   // Represents planetary orbiters (Mars Express, Juno, etc.)
-  private renderOrbiterIcon(x: number, y: number, size: number, color: string): void {
+  private renderOrbiterIcon(
+    x: number,
+    y: number,
+    size: number,
+    color: string
+  ): void {
     const s = Math.max(size, 2);
     this.ctx.fillStyle = color;
 
     // Diamond-shaped body
     this.ctx.beginPath();
-    this.ctx.moveTo(x, y - s * 0.8);     // Top
-    this.ctx.lineTo(x + s * 0.5, y);      // Right
-    this.ctx.lineTo(x, y + s * 0.8);      // Bottom
-    this.ctx.lineTo(x - s * 0.5, y);      // Left
+    this.ctx.moveTo(x, y - s * 0.8); // Top
+    this.ctx.lineTo(x + s * 0.5, y); // Right
+    this.ctx.lineTo(x, y + s * 0.8); // Bottom
+    this.ctx.lineTo(x - s * 0.5, y); // Left
     this.ctx.closePath();
     this.ctx.fill();
 
@@ -429,7 +533,12 @@ export class Renderer {
 
   // Draw rover/lander icon: box with wheels/legs
   // Represents Perseverance, Curiosity, landers
-  private renderRoverIcon(x: number, y: number, size: number, color: string): void {
+  private renderRoverIcon(
+    x: number,
+    y: number,
+    size: number,
+    color: string
+  ): void {
     const s = Math.max(size, 2);
     this.ctx.fillStyle = color;
 
@@ -521,7 +630,10 @@ export class Renderer {
 
     // Outer edge
     for (let i = 0; i < path.length; i++) {
-      const screen = this.camera.worldToScreen(path[i].outer.x, path[i].outer.y);
+      const screen = this.camera.worldToScreen(
+        path[i].outer.x,
+        path[i].outer.y
+      );
       if (i === 0) {
         this.ctx.moveTo(screen.x, screen.y);
       } else {
@@ -531,7 +643,10 @@ export class Renderer {
 
     // Inner edge (reverse direction to create hole)
     for (let i = path.length - 1; i >= 0; i--) {
-      const screen = this.camera.worldToScreen(path[i].inner.x, path[i].inner.y);
+      const screen = this.camera.worldToScreen(
+        path[i].inner.x,
+        path[i].inner.y
+      );
       this.ctx.lineTo(screen.x, screen.y);
     }
 
