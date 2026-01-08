@@ -57,15 +57,9 @@ function calculateAsteroidPosition(ast: AsteroidData, julianDate: number): Posit
   };
 }
 
-// Main asteroid belt class with LOD support
+// Main asteroid belt class (LOD disabled - shows all asteroids)
 export class AsteroidBelt {
   private asteroids: AsteroidData[] = [];
-  private majorAsteroids: AsteroidData[] = [];  // Named, always shown at medium zoom
-
-  // Cached positions (updated periodically)
-  private positionCache: Map<number, Position> = new Map();
-  private cacheJulianDate: number = 0;
-  private readonly CACHE_DURATION = 1;  // Days
 
   // Belt boundaries (AU)
   private readonly INNER_BELT = 2.1;
@@ -76,7 +70,6 @@ export class AsteroidBelt {
 
   constructor(asteroids: AsteroidData[]) {
     this.asteroids = asteroids;
-    this.majorAsteroids = asteroids.filter(a => a.name);
   }
 
   // Get count of asteroids
@@ -84,29 +77,12 @@ export class AsteroidBelt {
     return this.asteroids.length;
   }
 
-  // Get visible asteroids based on zoom level
+  // Get visible asteroids (all of them - LOD disabled)
   getVisibleAsteroids(
-    camera: Camera,
+    _camera: Camera,
     julianDate: number
   ): Position[] {
-    // Calculate visible AU range
-    const visibleRangeKm = Math.max(camera.width, camera.height) / camera.zoom;
-    const visibleRangeAU = visibleRangeKm / AU_KM;
-
-    // LOD thresholds
-    if (visibleRangeAU > 100) {
-      // Very zoomed out - show nothing (use belt ring instead)
-      return [];
-    } else if (visibleRangeAU > 20) {
-      // Show only major asteroids (~20)
-      return this.getAsteroidPositions(this.majorAsteroids, julianDate);
-    } else if (visibleRangeAU > 5) {
-      // Show sample of ~500 asteroids
-      return this.getSampledPositions(500, julianDate);
-    } else {
-      // Zoomed in - show more asteroids that are in view
-      return this.getViewportPositions(camera, julianDate, 2000);
-    }
+    return this.getAsteroidPositions(this.asteroids, julianDate);
   }
 
   // Get positions for specific asteroids
@@ -114,70 +90,9 @@ export class AsteroidBelt {
     return asteroids.map(ast => calculateAsteroidPosition(ast, julianDate));
   }
 
-  // Get evenly sampled positions
-  private getSampledPositions(count: number, julianDate: number): Position[] {
-    const step = Math.max(1, Math.floor(this.asteroids.length / count));
-    const positions: Position[] = [];
-
-    for (let i = 0; i < this.asteroids.length && positions.length < count; i += step) {
-      positions.push(calculateAsteroidPosition(this.asteroids[i], julianDate));
-    }
-
-    return positions;
-  }
-
-  // Get asteroids visible in viewport
-  private getViewportPositions(
-    camera: Camera,
-    julianDate: number,
-    maxCount: number
-  ): Position[] {
-    // Update cache if stale
-    if (Math.abs(julianDate - this.cacheJulianDate) > this.CACHE_DURATION) {
-      this.updateCache(julianDate);
-    }
-
-    const positions: Position[] = [];
-    const margin = 50;  // Pixel margin
-
-    for (let i = 0; i < this.asteroids.length && positions.length < maxCount; i++) {
-      let pos = this.positionCache.get(i);
-      if (!pos) {
-        pos = calculateAsteroidPosition(this.asteroids[i], julianDate);
-        this.positionCache.set(i, pos);
-      }
-
-      // Check if in viewport
-      const screen = camera.worldToScreen(pos.x, pos.y);
-      if (
-        screen.x >= -margin &&
-        screen.x <= camera.width + margin &&
-        screen.y >= -margin &&
-        screen.y <= camera.height + margin
-      ) {
-        positions.push(pos);
-      }
-    }
-
-    return positions;
-  }
-
-  // Update position cache
-  private updateCache(julianDate: number): void {
-    this.positionCache.clear();
-    this.cacheJulianDate = julianDate;
-
-    // Pre-calculate all positions
-    for (let i = 0; i < this.asteroids.length; i++) {
-      this.positionCache.set(i, calculateAsteroidPosition(this.asteroids[i], julianDate));
-    }
-  }
-
-  // Should render the statistical belt ring?
-  shouldRenderBeltRing(camera: Camera): boolean {
-    const visibleRangeKm = Math.max(camera.width, camera.height) / camera.zoom;
-    const visibleRangeAU = visibleRangeKm / AU_KM;
-    return visibleRangeAU > 20;  // Show ring when zoomed out
+  // Should render the statistical belt ring? (disabled - showing all asteroids)
+  shouldRenderBeltRing(_camera: Camera): boolean {
+    return false;
   }
 
   // Get belt ring coordinates for rendering
