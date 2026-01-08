@@ -26,6 +26,7 @@ function convertSatelliteData(data: (typeof satelliteData)[0]): CelestialBody {
     radius: 0.01, // Very small, will use minimum display size (2px)
     color: SATELLITE_COLORS[data.category] || "#ffffff",
     parentName: "Earth",
+    hideOrbit: true, // Don't show orbit paths for satellites
     parentCentricElements: {
       a: data.a,
       e: data.e,
