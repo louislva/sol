@@ -114,23 +114,17 @@ export function getBodyPosition(
 }
 
 // Calculate orbit path for rendering
+// For parent-centric bodies (moons/satellites), returns RELATIVE path centered at (0,0).
+// The renderer is responsible for applying the parent's current position offset.
 export function getOrbitPath(
   body: CelestialBody,
   julianDate: number,
   numPoints?: number
 ): Array<{ x: number; y: number }> {
   // Handle parent-centric bodies (moons, satellites)
-  if (body.parentCentricElements && body.parentName) {
-    const parent = globalBodyMap.get(body.parentName);
-    if (parent) {
-      const parentPos = getBodyPosition(parent, julianDate);
-      const relativePath = calculateParentCentricOrbitPath(body.parentCentricElements, numPoints);
-      // Offset all points by parent position
-      return relativePath.map(p => ({
-        x: parentPos.x + p.x,
-        y: parentPos.y + p.y,
-      }));
-    }
+  // Return relative path - renderer will apply parent position offset
+  if (body.parentCentricElements) {
+    return calculateParentCentricOrbitPath(body.parentCentricElements, numPoints);
   }
 
   // Heliocentric bodies

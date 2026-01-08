@@ -299,12 +299,25 @@ export class Renderer {
     const orbitPoints = this.getOrbitPoints(body, julianDate);
     if (orbitPoints.length < 2) return;
 
+    // For parent-centric bodies (moons/satellites), get the current parent position
+    // to apply as an offset. This ensures the orbit follows the parent smoothly.
+    let parentOffset = { x: 0, y: 0 };
+    if (body.parentCentricElements && body.parentName) {
+      const parent = this.bodyMap.get(body.parentName);
+      if (parent) {
+        parentOffset = getBodyPosition(parent, julianDate);
+      }
+    }
+
     // Quick bounds check - skip if entire orbit is off screen
     const screenPoints: Array<{ x: number; y: number; visible: boolean }> = [];
     let anyVisible = false;
 
     for (const point of orbitPoints) {
-      const screen = this.camera.worldToScreen(point.x, point.y);
+      // Apply parent offset for parent-centric bodies (moons/satellites)
+      const worldX = point.x + parentOffset.x;
+      const worldY = point.y + parentOffset.y;
+      const screen = this.camera.worldToScreen(worldX, worldY);
       const visible =
         screen.x >= -1000 &&
         screen.x <= this.camera.width + 1000 &&

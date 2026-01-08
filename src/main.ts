@@ -35,28 +35,13 @@ if (earth) {
 // Current moon filter level
 let currentMoonFilter: MoonCategory = 'medium';
 
-// Threshold for showing satellites (Earth radius in pixels)
-const SATELLITE_VISIBILITY_THRESHOLD = 30; // Show satellites when Earth > 30px radius
-
-// Check if we should show satellites based on zoom level
-function shouldShowSatellites(): boolean {
-  // Find Earth in the bodies array
-  const earth = allBodies.find(b => b.name === 'Earth');
-  if (!earth) return false;
-
-  // Calculate Earth's display size
-  const earthRadiusPixels = camera.kmToPixels(earth.radius);
-
-  // Show satellites when Earth is large enough on screen
-  return earthRadiusPixels > SATELLITE_VISIBILITY_THRESHOLD;
-}
-
 // Build bodies array based on current moon filter and time
 function buildBodies(julianDate?: number): CelestialBody[] {
   const bodies = [
     ...allBodies,                      // Sun, planets, dwarf planets
     ...filterMoons(currentMoonFilter), // Moons filtered by category
     ...allComets,                      // Comets
+    ...allSatellites,                  // Earth satellites (parent occlusion handles visibility)
   ];
 
   // Add spacecraft - prefer JPL Horizons data over legacy manual data
@@ -66,11 +51,6 @@ function buildBodies(julianDate?: number): CelestialBody[] {
   } else {
     // Fallback to legacy manual probes if JPL data not loaded
     bodies.push(...allProbes);
-  }
-
-  // Add satellites with LOD - only when zoomed in on Earth
-  if (shouldShowSatellites()) {
-    bodies.push(...allSatellites);
   }
 
   return bodies;
@@ -352,9 +332,6 @@ function getHoveredBody(julianDate: number): HoverResult | null {
 let lastBodiesRebuildJD = 0;
 const BODIES_REBUILD_INTERVAL = 1; // Rebuild every ~1 Julian day
 
-// Track satellite visibility state to detect LOD changes
-let lastSatelliteVisibility = shouldShowSatellites();
-
 // Main render loop
 function animate(): void {
   // Update auto speed based on zoom if in auto mode
@@ -364,16 +341,6 @@ function animate(): void {
 
   // Update time
   time.update();
-
-  // Check if satellite visibility changed (LOD threshold crossed)
-  const currentSatelliteVisibility = shouldShowSatellites();
-  const satelliteVisibilityChanged = currentSatelliteVisibility !== lastSatelliteVisibility;
-
-  if (satelliteVisibilityChanged) {
-    bodies = buildBodies(time.currentJulian);
-    lastSatelliteVisibility = currentSatelliteVisibility;
-    console.log(`Satellites ${currentSatelliteVisibility ? 'shown' : 'hidden'} (${allSatellites.length} satellites)`);
-  }
 
   // Rebuild bodies periodically for spacecraft timeline filtering
   if (hasSpacecraftData() && Math.abs(time.currentJulian - lastBodiesRebuildJD) > BODIES_REBUILD_INTERVAL) {
