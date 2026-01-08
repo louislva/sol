@@ -197,10 +197,10 @@ canvas.addEventListener('click', (e) => {
     return;
   }
 
-  const clickedBody = getHoveredBody(time.currentJulian);
-  if (clickedBody) {
-    sidebar.show(clickedBody, time.currentJulian);
-    renderer.setSelectedBody(clickedBody.name);
+  const hoverResult = getHoveredBody(time.currentJulian);
+  if (hoverResult) {
+    sidebar.show(hoverResult.body, time.currentJulian);
+    renderer.setSelectedBody(hoverResult.body.name);
   } else {
     sidebar.hide();
     renderer.setSelectedBody(null);
@@ -263,8 +263,14 @@ function isOccludedByParent(body: CelestialBody, julianDate: number, bodyMap: Ma
   return distance <= parentRadiusPixels;
 }
 
-// Find body under cursor (for zoom centering)
-function getHoveredBody(julianDate: number): CelestialBody | null {
+// Result type for hover detection
+interface HoverResult {
+  body: CelestialBody;
+  isDirectHit: boolean; // true if hovering over the body itself, false if over orbit
+}
+
+// Find body under cursor (for zoom centering and click detection)
+function getHoveredBody(julianDate: number): HoverResult | null {
   let closest: CelestialBody | null = null;
   let closestDist = Infinity;
 
@@ -298,9 +304,9 @@ function getHoveredBody(julianDate: number): CelestialBody | null {
     }
   }
 
-  // If we found a direct body hit, return it
+  // If we found a direct body hit, return it with isDirectHit = true
   if (closest) {
-    return closest;
+    return { body: closest, isDirectHit: true };
   }
 
   // Second pass: check orbit hits
@@ -334,7 +340,12 @@ function getHoveredBody(julianDate: number): CelestialBody | null {
     }
   }
 
-  return closestOrbitBody;
+  // Return orbit hit with isDirectHit = false
+  if (closestOrbitBody) {
+    return { body: closestOrbitBody, isDirectHit: false };
+  }
+
+  return null;
 }
 
 // Track last time we rebuilt bodies for timeline filtering
@@ -371,11 +382,17 @@ function animate(): void {
   }
 
   // Update hover target for zoom centering and visual feedback
-  const hoveredBody = getHoveredBody(time.currentJulian);
-  if (hoveredBody) {
-    const pos = getBodyPosition(hoveredBody, time.currentJulian);
-    camera.setHoverTarget({ x: pos.x, y: pos.y });
-    renderer.setHoveredBody(hoveredBody.name);
+  const hoverResult = getHoveredBody(time.currentJulian);
+  if (hoverResult) {
+    // Only set hover target for zoom centering if directly hovering over the body (not orbit)
+    if (hoverResult.isDirectHit) {
+      const pos = getBodyPosition(hoverResult.body, time.currentJulian);
+      camera.setHoverTarget({ x: pos.x, y: pos.y });
+    } else {
+      camera.setHoverTarget(null);
+    }
+    // Always show visual hover feedback for both body and orbit
+    renderer.setHoveredBody(hoverResult.body.name);
   } else {
     camera.setHoverTarget(null);
     renderer.setHoveredBody(null);
