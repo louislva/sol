@@ -107,8 +107,12 @@ export class Camera {
       const mouseX = e.offsetX;
       const mouseY = e.offsetY;
 
-      // Use hover target (body position) if available, otherwise cursor position
-      if (this.hoverTargetWorld) {
+      // Determine zoom direction: deltaY > 0 means zooming out, deltaY < 0 means zooming in
+      const isZoomingIn = e.deltaY < 0;
+
+      // Use hover target (body position) only when zooming IN and hovering over a body
+      // When zooming out, always use cursor position for more intuitive behavior
+      if (isZoomingIn && this.hoverTargetWorld) {
         zoomAnchorWorld = this.hoverTargetWorld;
         // Calculate where this world point currently appears on screen
         zoomAnchorScreen = this.worldToScreen(this.hoverTargetWorld.x, this.hoverTargetWorld.y);
