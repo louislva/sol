@@ -35,6 +35,13 @@ export class Renderer {
   // Currently selected body name (clicked)
   private selectedBodyName: string | null = null;
 
+  // SOL label fade animation
+  private solLabelOpacity: number = 1;
+  private solLabelTargetOpacity: number = 1;
+  private solLabelLastUpdate: number = performance.now();
+  private readonly SOL_FADE_DURATION = 300; // ms
+  private readonly SOL_ZOOM_THRESHOLD = 0.0019; // fade out as soon as zooming out from initial (0.002)
+
   private readonly bgColor = "#000000";
   private readonly labelColor = "#cccccc";
 
@@ -210,6 +217,48 @@ export class Renderer {
         this.ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
         this.ctx.lineWidth = 0.5;
         this.ctx.stroke();
+      }
+
+      // Draw "SOL" text on the sun with fade animation
+      if (body.type === "star") {
+        // Update SOL label opacity based on zoom threshold
+        const now = performance.now();
+        const dt = now - this.solLabelLastUpdate;
+        this.solLabelLastUpdate = now;
+
+        // Set target opacity based on zoom level
+        this.solLabelTargetOpacity = this.camera.zoom >= this.SOL_ZOOM_THRESHOLD ? 1 : 0;
+
+        // Animate toward target opacity
+        if (this.solLabelOpacity !== this.solLabelTargetOpacity) {
+          const speed = dt / this.SOL_FADE_DURATION;
+          if (this.solLabelOpacity < this.solLabelTargetOpacity) {
+            this.solLabelOpacity = Math.min(this.solLabelTargetOpacity, this.solLabelOpacity + speed);
+          } else {
+            this.solLabelOpacity = Math.max(this.solLabelTargetOpacity, this.solLabelOpacity - speed);
+          }
+        }
+
+        // Only draw if visible
+        if (this.solLabelOpacity > 0.01) {
+          this.ctx.globalAlpha = this.solLabelOpacity;
+          this.ctx.textAlign = "center";
+          this.ctx.fillStyle = "#000000";
+
+          // Draw "SOL" text (centered, slightly above middle)
+          const fontSize = Math.max(radiusPixels * 0.18, 14);
+          this.ctx.font = `bold ${fontSize}px "Space Mono", monospace`;
+          this.ctx.textBaseline = "bottom";
+          this.ctx.fillText("SOL", screenPos.x, screenPos.y);
+
+          // Draw hint text below
+          const hintFontSize = Math.max(fontSize * 0.4, 9);
+          this.ctx.font = `${hintFontSize}px "Space Mono", monospace`;
+          this.ctx.textBaseline = "top";
+          this.ctx.fillText("scroll to zoom out 🔍", screenPos.x, screenPos.y + 4);
+
+          this.ctx.globalAlpha = 1;
+        }
       }
     }
 

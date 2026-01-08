@@ -20,17 +20,12 @@ const camera = new Camera(canvas);
 const renderer = new Renderer(canvas, camera);
 const time = new TimeSystem();
 
-// Set initial view to Earth at LEO distance
-const earth = allBodies.find(b => b.name === 'Earth');
-if (earth) {
-  const earthPos = getBodyPosition(earth, time.currentJulian);
-  camera.x = earthPos.x;
-  camera.y = earthPos.y;
-  // Set zoom to show Earth at medium view (10x wider than original)
-  // Earth radius is ~6371 km, so zoom = 4px / 6371km ≈ 0.0006
-  camera['_zoom'] = 0.0006;
-  camera['_targetZoom'] = 0.0006;
-}
+// Set initial view to Sun, zoomed all the way in
+// Sun is at (0, 0), radius is ~695,700 km
+camera.x = 0;
+camera.y = 0;
+camera['_zoom'] = 0.002;
+camera['_targetZoom'] = 0.002;
 
 // Current moon filter level
 let currentMoonFilter: MoonCategory = 'medium';
