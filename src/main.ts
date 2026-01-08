@@ -365,11 +365,8 @@ function animate(): void {
     renderer.setHoveredBody(null);
   }
 
-  // Render all celestial bodies
-  renderer.renderAll(bodies, time.currentJulian);
-
-  // Render asteroid belt
-  renderer.renderAsteroids(asteroidBelt, time.currentJulian);
+  // Render everything (asteroids first, then orbits, then bodies)
+  renderer.renderAll(bodies, time.currentJulian, asteroidBelt);
 
   // Update UI
   dateDisplay.textContent = time.formatDate();

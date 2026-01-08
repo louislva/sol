@@ -571,7 +571,7 @@ export class Renderer {
     this.ctx.fill();
   }
 
-  renderAll(bodies: CelestialBody[], julianDate: number): void {
+  renderAll(bodies: CelestialBody[], julianDate: number, asteroidBelt?: AsteroidBelt): void {
     this.clear();
 
     // Build body map for parent lookup in occlusion checks
@@ -583,7 +583,12 @@ export class Renderer {
     // Set global body map for hierarchical position calculations
     setBodyMap(bodies);
 
-    // Draw orbits first (behind bodies)
+    // Draw asteroids first (behind everything)
+    if (asteroidBelt) {
+      this.renderAsteroidsInternal(asteroidBelt, julianDate);
+    }
+
+    // Draw orbits (behind bodies)
     for (const body of bodies) {
       this.renderOrbit(body, julianDate);
     }
@@ -594,8 +599,8 @@ export class Renderer {
     }
   }
 
-  // Render asteroid belt with LOD
-  renderAsteroids(asteroidBelt: AsteroidBelt, julianDate: number): void {
+  // Internal asteroid rendering (called from renderAll)
+  private renderAsteroidsInternal(asteroidBelt: AsteroidBelt, julianDate: number): void {
     // Render belt ring when zoomed out
     if (asteroidBelt.shouldRenderBeltRing(this.camera)) {
       this.renderAsteroidBeltRing(asteroidBelt);
