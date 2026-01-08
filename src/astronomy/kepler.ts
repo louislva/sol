@@ -101,9 +101,12 @@ function solveKeplerHyperbolic(M: number, e: number, tolerance: number = 1e-8): 
 function calculateOrbitalPosition(a: number, e: number, E: number): { x: number; y: number } {
   if (e > 1) {
     // Hyperbolic orbit
-    const x = a * (e - Math.cosh(E));
+    // Use |a| since a < 0 for hyperbolic orbits by convention,
+    // but we want positive x at perihelion (pointing toward perihelion direction)
+    const absA = Math.abs(a);
+    const x = absA * (e - Math.cosh(E));
     // Use Math.max to handle floating-point errors that could make e*e - 1 negative
-    const y = a * Math.sqrt(Math.max(0, e * e - 1)) * Math.sinh(E);
+    const y = absA * Math.sqrt(Math.max(0, e * e - 1)) * Math.sinh(E);
     return { x, y };
   } else {
     // Elliptical orbit
@@ -232,7 +235,8 @@ export function calculateParentCentricOrbitPath(
   if (e > 0.99) {
     p = elements.a * (1 - e) * (1 + e);
   } else if (e > 1) {
-    p = elements.a * (e * e - 1);
+    // Use |a| since a < 0 for hyperbolic orbits
+    p = Math.abs(elements.a) * (e * e - 1);
   } else {
     p = elements.a * (1 - e * e);
   }
@@ -297,7 +301,8 @@ export function calculateOrbitPath(
   if (e > 0.99) {
     p = a * (1 - e) * (1 + e);
   } else if (e > 1) {
-    p = a * (e * e - 1); // Hyperbolic: negative a, so p > 0
+    // Use |a| since a < 0 for hyperbolic orbits
+    p = Math.abs(a) * (e * e - 1);
   } else {
     p = a * (1 - e * e);
   }
