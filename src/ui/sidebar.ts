@@ -87,6 +87,47 @@ export function update(julianDate: number): void {
     </div>
   `;
 
+  // Discovery information for natural bodies
+  if (selectedBody.discovery && selectedBody.type !== 'probe' && selectedBody.type !== 'satellite') {
+    const disc = selectedBody.discovery;
+    if (disc.by || disc.year) {
+      html += `<div class="sidebar-divider"></div>`;
+      html += `<div class="sidebar-section-title">Discovery</div>`;
+      if (disc.by) {
+        html += `
+          <div class="sidebar-section">
+            <div class="sidebar-label">Discovered by</div>
+            <div class="sidebar-value">${disc.by}</div>
+          </div>
+        `;
+      }
+      if (disc.date) {
+        html += `
+          <div class="sidebar-section">
+            <div class="sidebar-label">Date</div>
+            <div class="sidebar-value">${disc.date}</div>
+          </div>
+        `;
+      } else if (disc.year) {
+        html += `
+          <div class="sidebar-section">
+            <div class="sidebar-label">Year</div>
+            <div class="sidebar-value">${disc.year}</div>
+          </div>
+        `;
+      }
+    } else {
+      // Empty discovery object means known since antiquity
+      html += `<div class="sidebar-divider"></div>`;
+      html += `<div class="sidebar-section-title">Discovery</div>`;
+      html += `
+        <div class="sidebar-section">
+          <div class="sidebar-value" style="color: #888">Known since antiquity</div>
+        </div>
+      `;
+    }
+  }
+
   // Parent-specific info for moons
   if (selectedBody.parentName && selectedBody.parentName !== 'Sun') {
     html += `

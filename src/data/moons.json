@@ -10,7 +10,8 @@
     "omega": 309.8177085902286,
     "M0": 152.4610650276343,
     "period": 27.0931029063738,
-    "category": "major"
+    "category": "major",
+    "discovery": {}
   },
   {
     "name": "Phobos",
@@ -23,7 +24,8 @@
     "omega": 344.1626272970799,
     "M0": 32.86340411600095,
     "period": 0.3191872787473379,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Asaph Hall", "year": 1877, "date": "August 18, 1877" }
   },
   {
     "name": "Deimos",
@@ -36,7 +38,8 @@
     "omega": 220.8863536357321,
     "M0": 138.692741287703,
     "period": 1.262545735688299,
-    "category": "named"
+    "category": "named",
+    "discovery": { "by": "Asaph Hall", "year": 1877, "date": "August 12, 1877" }
   },
   {
     "name": "Io",
@@ -49,7 +52,8 @@
     "omega": 77.59639267376278,
     "M0": 65.46465943038989,
     "period": 1.771359287679422,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Galileo Galilei", "year": 1610, "date": "January 8, 1610" }
   },
   {
     "name": "Europa",
@@ -62,7 +66,8 @@
     "omega": 254.5925609592389,
     "M0": 36.1152247133381,
     "period": 3.553059847693304,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Galileo Galilei", "year": 1610, "date": "January 8, 1610" }
   },
   {
     "name": "Ganymede",
@@ -75,7 +80,8 @@
     "omega": 317.3123792043016,
     "M0": 304.7017485905985,
     "period": 7.156793034756448,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Galileo Galilei", "year": 1610, "date": "January 7, 1610" }
   },
   {
     "name": "Callisto",
@@ -88,7 +94,8 @@
     "omega": 16.0868513164216,
     "M0": 95.95633620089029,
     "period": 16.69103458850532,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Galileo Galilei", "year": 1610, "date": "January 7, 1610" }
   },
   {
     "name": "Amalthea",
@@ -101,7 +108,8 @@
     "omega": 106.8806422012611,
     "M0": 335.9473312736794,
     "period": 0.5016365148909709,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Edward Emerson Barnard", "year": 1892, "date": "September 9, 1892" }
   },
   {
     "name": "Himalia",
@@ -114,7 +122,8 @@
     "omega": 321.2125058122124,
     "M0": 78.91839556129301,
     "period": 247.8437107244475,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Charles Dillon Perrine", "year": 1904, "date": "December 3, 1904" }
   },
   {
     "name": "Elara",
@@ -127,7 +136,8 @@
     "omega": 129.851994310947,
     "M0": 347.6495891039617,
     "period": 260.0662598006548,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Charles Dillon Perrine", "year": 1905, "date": "January 2, 1905" }
   },
   {
     "name": "Pasiphae",
@@ -140,7 +150,8 @@
     "omega": 172.836068246988,
     "M0": 279.455214717186,
     "period": 732.5714269334345,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Philibert Jacques Melotte", "year": 1908, "date": "January 27, 1908" }
   },
   {
     "name": "Sinope",
@@ -153,7 +164,8 @@
     "omega": 354.204449944507,
     "M0": 157.8258876856038,
     "period": 710.5982333959037,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Seth Barnes Nicholson", "year": 1914, "date": "July 21, 1914" }
   },
   {
     "name": "Lysithea",
@@ -166,7 +178,8 @@
     "omega": 48.32794140836892,
     "M0": 329.0809574757986,
     "period": 259.7648316743321,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Seth Barnes Nicholson", "year": 1938, "date": "July 6, 1938" }
   },
   {
     "name": "Carme",
@@ -179,7 +192,8 @@
     "omega": 6.594811709777672,
     "M0": 259.5680755570189,
     "period": 769.0227458836357,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Seth Barnes Nicholson", "year": 1938, "date": "July 30, 1938" }
   },
   {
     "name": "Ananke",
@@ -192,7 +206,8 @@
     "omega": 78.64182058842124,
     "M0": 272.1706012694445,
     "period": 652.8375279646817,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Seth Barnes Nicholson", "year": 1951, "date": "September 28, 1951" }
   },
   {
     "name": "Leda",
@@ -205,7 +220,8 @@
     "omega": 271.3490874642858,
     "M0": 233.294765987286,
     "period": 240.1597617041641,
-    "category": "named"
+    "category": "named",
+    "discovery": { "by": "Charles T. Kowal", "year": 1974, "date": "September 14, 1974" }
   },
   {
     "name": "Thebe",
@@ -218,7 +234,8 @@
     "omega": 35.63028394955088,
     "M0": 80.69119448706832,
     "period": 0.6776596818792162,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Stephen P. Synnott", "year": 1979, "date": "March 5, 1979" }
   },
   {
     "name": "Adrastea",
@@ -231,7 +248,8 @@
     "omega": 123.1619243623107,
     "M0": 355.2585204971379,
     "period": 0.3023988245936201,
-    "category": "named"
+    "category": "named",
+    "discovery": { "by": "David C. Jewitt, G. Edward Danielson", "year": 1979, "date": "July 8, 1979" }
   },
   {
     "name": "Metis",
@@ -244,7 +262,8 @@
     "omega": 70.35659892822419,
     "M0": 6.854098964309526,
     "period": 0.2989349496826514,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Stephen P. Synnott", "year": 1979, "date": "March 4, 1979" }
   },
   {
     "name": "Mimas",
@@ -257,7 +276,8 @@
     "omega": 98.0686049946984,
     "M0": 239.0191810705801,
     "period": 0.9472632411421982,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Herschel", "year": 1789, "date": "September 17, 1789" }
   },
   {
     "name": "Enceladus",
@@ -270,7 +290,8 @@
     "omega": 148.3362585228979,
     "M0": 125.4639827437763,
     "period": 1.37450506852197,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Herschel", "year": 1789, "date": "August 28, 1789" }
   },
   {
     "name": "Tethys",
@@ -283,7 +304,8 @@
     "omega": 247.3295309277417,
     "M0": 356.4585628975327,
     "period": 1.891654510341091,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Giovanni Cassini", "year": 1684, "date": "March 21, 1684" }
   },
   {
     "name": "Dione",
@@ -296,7 +318,8 @@
     "omega": 178.2134396175912,
     "M0": 24.54583338349549,
     "period": 2.740364474454532,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Giovanni Cassini", "year": 1684, "date": "March 21, 1684" }
   },
   {
     "name": "Rhea",
@@ -309,7 +332,8 @@
     "omega": 158.2657072319555,
     "M0": 254.2665786580164,
     "period": 4.520012481183005,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Giovanni Cassini", "year": 1672, "date": "December 23, 1672" }
   },
   {
     "name": "Titan",
@@ -322,7 +346,8 @@
     "omega": 164.3940738820773,
     "M0": 174.7393077480846,
     "period": 15.94740598325876,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Christiaan Huygens", "year": 1655, "date": "March 25, 1655" }
   },
   {
     "name": "Hyperion",
@@ -335,7 +360,8 @@
     "omega": 188.6928016268313,
     "M0": 79.03439677332516,
     "period": 21.36846413621456,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Cranch Bond, George Phillips Bond, William Lassell", "year": 1848, "date": "September 16, 1848" }
   },
   {
     "name": "Iapetus",
@@ -348,7 +374,8 @@
     "omega": 229.4969433091679,
     "M0": 210.4459705161608,
     "period": 79.41281625525411,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Giovanni Cassini", "year": 1671, "date": "October 25, 1671" }
   },
   {
     "name": "Phoebe",
@@ -361,7 +388,8 @@
     "omega": 353.6442197827933,
     "M0": 59.05166151828057,
     "period": 549.6544631465312,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Henry Pickering", "year": 1899, "date": "August 16, 1899" }
   },
   {
     "name": "Janus",
@@ -374,7 +402,8 @@
     "omega": 134.7939614482031,
     "M0": 8.021760633129457,
     "period": 0.7000490913896491,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Audouin Dollfus", "year": 1966, "date": "December 15, 1966" }
   },
   {
     "name": "Epimetheus",
@@ -387,7 +416,8 @@
     "omega": 260.4671053812436,
     "M0": 67.3331358875815,
     "period": 0.7003187724589364,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Richard Walker", "year": 1966, "date": "December 18, 1966" }
   },
   {
     "name": "Helene",
@@ -400,7 +430,8 @@
     "omega": 172.4685436082192,
     "M0": 82.43604068655411,
     "period": 2.74243664337473,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Pierre Laques, Jean Lecacheux", "year": 1980, "date": "March 1, 1980" }
   },
   {
     "name": "Telesto",
@@ -413,7 +444,8 @@
     "omega": 299.4485723274697,
     "M0": 2.411818708042631,
     "period": 1.891745338919968,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Bradford A. Smith, Harold Reitsema, Stephen M. Larson, John W. Fountain", "year": 1980, "date": "April 8, 1980" }
   },
   {
     "name": "Calypso",
@@ -426,7 +458,8 @@
     "omega": 212.4322652823507,
     "M0": 334.0375270236236,
     "period": 1.891388449293831,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Dan Pascu, P. Kenneth Seidelmann, William Baum, Douglas Currie", "year": 1980, "date": "March 13, 1980" }
   },
   {
     "name": "Atlas",
@@ -439,7 +472,8 @@
     "omega": 283.6656759373142,
     "M0": 348.5341428196291,
     "period": 0.6074466070838881,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Richard Terrile", "year": 1980, "date": "October 1980" }
   },
   {
     "name": "Prometheus",
@@ -452,7 +486,8 @@
     "omega": 339.4863080593591,
     "M0": 9.87350457686164,
     "period": 0.6187274626604774,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Stewart A. Collins, Donald Carlson", "year": 1980, "date": "October 1980" }
   },
   {
     "name": "Pandora",
@@ -465,7 +500,8 @@
     "omega": 200.0899836487238,
     "M0": 23.63439165496647,
     "period": 0.6341998719799502,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Stewart A. Collins, Donald Carlson", "year": 1980, "date": "October 1980" }
   },
   {
     "name": "Pan",
@@ -478,7 +514,8 @@
     "omega": 59.71936253275894,
     "M0": 359.9164105222044,
     "period": 0.5809051653407483,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Mark R. Showalter", "year": 1990, "date": "July 16, 1990" }
   },
   {
     "name": "Ariel",
@@ -491,7 +528,8 @@
     "omega": 40.49459550079909,
     "M0": 229.0755919427602,
     "period": 2.52094532923642,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Lassell", "year": 1851, "date": "October 24, 1851" }
   },
   {
     "name": "Umbriel",
@@ -504,7 +542,8 @@
     "omega": 334.9378434327284,
     "M0": 314.6682398785816,
     "period": 4.145178106559435,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Lassell", "year": 1851, "date": "October 24, 1851" }
   },
   {
     "name": "Titania",
@@ -517,7 +556,8 @@
     "omega": 202.7385686400467,
     "M0": 94.47712542513281,
     "period": 8.706651504726453,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Herschel", "year": 1787, "date": "January 11, 1787" }
   },
   {
     "name": "Oberon",
@@ -530,7 +570,8 @@
     "omega": 263.7581779319042,
     "M0": 97.11039315056391,
     "period": 13.46943362232285,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Herschel", "year": 1787, "date": "January 11, 1787" }
   },
   {
     "name": "Miranda",
@@ -543,7 +584,8 @@
     "omega": 251.8814308113184,
     "M0": 198.5497390022718,
     "period": 1.414037861803578,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Gerard Kuiper", "year": 1948, "date": "February 16, 1948" }
   },
   {
     "name": "Cordelia",
@@ -556,7 +598,8 @@
     "omega": 347.0762847005304,
     "M0": 7.598434468475554,
     "period": 0.3361119511431474,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 20, 1986" }
   },
   {
     "name": "Ophelia",
@@ -569,7 +612,8 @@
     "omega": 33.62519689347634,
     "M0": 320.9930537098459,
     "period": 0.3774258082781206,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 20, 1986" }
   },
   {
     "name": "Bianca",
@@ -582,7 +626,8 @@
     "omega": 318.3971589386681,
     "M0": 336.6062203429502,
     "period": 0.4355693547287632,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 23, 1986" }
   },
   {
     "name": "Cressida",
@@ -595,7 +640,8 @@
     "omega": 238.8985370017336,
     "M0": 93.13589982330174,
     "period": 0.4645295031417097,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 9, 1986" }
   },
   {
     "name": "Desdemona",
@@ -608,7 +654,8 @@
     "omega": 278.8070300103107,
     "M0": 358.0078273571289,
     "period": 0.4746135021615454,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 13, 1986" }
   },
   {
     "name": "Juliet",
@@ -621,7 +668,8 @@
     "omega": 167.1344782220161,
     "M0": 274.7318269624762,
     "period": 0.4940060306817562,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 3, 1986" }
   },
   {
     "name": "Portia",
@@ -634,7 +682,8 @@
     "omega": 150.4508172680457,
     "M0": 114.5632135781665,
     "period": 0.5141160304074998,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 3, 1986" }
   },
   {
     "name": "Rosalind",
@@ -647,7 +696,8 @@
     "omega": 93.72168934753716,
     "M0": 305.705634758535,
     "period": 0.5593683605800394,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1986, "date": "January 13, 1986" }
   },
   {
     "name": "Puck",
@@ -660,7 +710,8 @@
     "omega": 279.4792997850597,
     "M0": 221.7100040828823,
     "period": 0.7626377016612552,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1985, "date": "December 30, 1985" }
   },
   {
     "name": "Caliban",
@@ -673,7 +724,8 @@
     "omega": 339.3597901928158,
     "M0": 26.48859758640849,
     "period": 580.2919703315504,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Brett Gladman, Philip Nicholson, Joseph Burns, John Kavelaars", "year": 1997, "date": "September 6, 1997" }
   },
   {
     "name": "Sycorax",
@@ -686,7 +738,8 @@
     "omega": 17.26898462360719,
     "M0": 261.7433512907071,
     "period": 1283.785108546124,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Brett Gladman, Philip Nicholson, Joseph Burns, John Kavelaars", "year": 1997, "date": "September 6, 1997" }
   },
   {
     "name": "Triton",
@@ -699,7 +752,8 @@
     "omega": 160.8187521988259,
     "M0": 304.4390949981484,
     "period": 5.877036980601301,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "William Lassell", "year": 1846, "date": "October 10, 1846" }
   },
   {
     "name": "Nereid",
@@ -712,7 +766,8 @@
     "omega": 297.4356872709136,
     "M0": 216.1763077944429,
     "period": 359.8506922710578,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Gerard Kuiper", "year": 1949, "date": "May 1, 1949" }
   },
   {
     "name": "Naiad",
@@ -725,7 +780,8 @@
     "omega": 359.6148631344685,
     "M0": 354.077605388484,
     "period": 0.2952128185020919,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1989, "date": "September 1989" }
   },
   {
     "name": "Thalassa",
@@ -738,7 +794,8 @@
     "omega": 129.2497837579892,
     "M0": 357.788066343974,
     "period": 0.3122947793107639,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1989, "date": "September 1989" }
   },
   {
     "name": "Despina",
@@ -751,7 +808,8 @@
     "omega": 287.2688917602187,
     "M0": 348.7507464605119,
     "period": 0.3354480223997787,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1989, "date": "July 1989" }
   },
   {
     "name": "Galatea",
@@ -764,7 +822,8 @@
     "omega": 106.2771209788995,
     "M0": 13.37623997855199,
     "period": 0.4294719599728242,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Voyager 2", "year": 1989, "date": "July 1989" }
   },
   {
     "name": "Larissa",
@@ -777,7 +836,8 @@
     "omega": 201.1905535807886,
     "M0": 101.6179816258132,
     "period": 0.5553189256631835,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Harold Reitsema, William Hubbard, Larry Lebofsky, David Tholen", "year": 1981, "date": "May 24, 1981" }
   },
   {
     "name": "Proteus",
@@ -790,7 +850,8 @@
     "omega": 13.49772542498612,
     "M0": 37.31349251725105,
     "period": 1.122850516741957,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "Voyager 2", "year": 1989, "date": "June 16, 1989" }
   },
   {
     "name": "Charon",
@@ -803,7 +864,8 @@
     "omega": 172.5778460096006,
     "M0": 176.8540641914834,
     "period": 6.387219708677682,
-    "category": "major"
+    "category": "major",
+    "discovery": { "by": "James Christy", "year": 1978, "date": "June 22, 1978" }
   },
   {
     "name": "Nix",
@@ -816,7 +878,8 @@
     "omega": 340.1788221220806,
     "M0": 121.9763628351657,
     "period": 22.49517930762437,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Hubble Space Telescope", "year": 2005, "date": "May 15, 2005" }
   },
   {
     "name": "Hydra",
@@ -829,7 +892,8 @@
     "omega": 315.1939084739595,
     "M0": 320.7415139894733,
     "period": 50.61347131604838,
-    "category": "medium"
+    "category": "medium",
+    "discovery": { "by": "Hubble Space Telescope", "year": 2005, "date": "May 15, 2005" }
   },
   {
     "name": "Kerberos",
@@ -842,7 +906,8 @@
     "omega": 314.6759339917301,
     "M0": 351.8200049148274,
     "period": 79.58334257024632,
-    "category": "named"
+    "category": "named",
+    "discovery": { "by": "Hubble Space Telescope", "year": 2011, "date": "June 28, 2011" }
   },
   {
     "name": "Styx",
@@ -855,6 +920,7 @@
     "omega": 5.801245638508667,
     "M0": 222.424665686279,
     "period": 17.58406437831133,
-    "category": "named"
+    "category": "named",
+    "discovery": { "by": "Hubble Space Telescope", "year": 2012, "date": "June 26, 2012" }
   }
 ]

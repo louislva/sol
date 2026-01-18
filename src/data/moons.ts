@@ -52,7 +52,7 @@ const DEFAULT_MOON_COLOR = "#aaaaaa";
 
 // Convert JSON moon data to CelestialBody format
 function convertMoonData(data: (typeof moonData)[0]): CelestialBody {
-  return {
+  const body: CelestialBody = {
     name: data.name,
     type: "moon",
     radius: data.radius,
@@ -70,6 +70,13 @@ function convertMoonData(data: (typeof moonData)[0]): CelestialBody {
       epoch: J2000,
     },
   };
+
+  // Add discovery data if present
+  if (data.discovery) {
+    body.discovery = data.discovery as { by?: string; year?: number; date?: string };
+  }
+
+  return body;
 }
 
 // All moons from JPL data
