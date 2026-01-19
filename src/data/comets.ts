@@ -12,6 +12,11 @@ export const HalleysComet: CelestialBody = {
   type: 'comet',
   radius: 5.5,  // Approximate mean radius (irregular nucleus)
   color: BODY_COLORS.comet,
+  discovery: {
+    by: 'Edmond Halley',
+    year: 1705,
+    // Halley identified it as periodic; observed since antiquity
+  },
   elements: {
     a: 17.834,          // AU - very elongated
     e: 0.96714,         // High eccentricity
@@ -31,6 +36,11 @@ export const HaleBopp: CelestialBody = {
   type: 'comet',
   radius: 30,           // Very large nucleus
   color: '#88ddff',     // Bright blue-white
+  discovery: {
+    by: 'Alan Hale, Thomas Bopp',
+    year: 1995,
+    date: 'July 23, 1995',
+  },
   elements: {
     a: 186.0,           // AU - extremely long orbit
     e: 0.995,           // Nearly parabolic
@@ -49,6 +59,11 @@ export const Encke: CelestialBody = {
   type: 'comet',
   radius: 2.4,
   color: BODY_COLORS.comet,
+  discovery: {
+    by: 'Johann Franz Encke',
+    year: 1819,
+    // Encke computed its orbit; first observed by Pierre Méchain in 1786
+  },
   elements: {
     a: 2.215,           // AU - relatively small orbit
     e: 0.8483,
@@ -67,6 +82,11 @@ export const Tempel1: CelestialBody = {
   type: 'comet',
   radius: 3.0,
   color: BODY_COLORS.comet,
+  discovery: {
+    by: 'Wilhelm Tempel',
+    year: 1867,
+    date: 'April 3, 1867',
+  },
   elements: {
     a: 3.126,
     e: 0.5091,
@@ -85,6 +105,11 @@ export const ChuryumovGerasimenko: CelestialBody = {
   type: 'comet',
   radius: 2.0,          // Bilobed nucleus
   color: BODY_COLORS.comet,
+  discovery: {
+    by: 'Klim Churyumov, Svetlana Gerasimenko',
+    year: 1969,
+    date: 'September 20, 1969',
+  },
   elements: {
     a: 3.464,
     e: 0.6405,
@@ -104,6 +129,11 @@ export const NEOWISE: CelestialBody = {
   type: 'comet',
   radius: 2.5,
   color: '#aaeeff',
+  discovery: {
+    by: 'NEOWISE Space Telescope',
+    year: 2020,
+    date: 'March 27, 2020',
+  },
   elements: {
     a: 364.0,           // Very long period (~6800 years)
     e: 0.9992,
@@ -122,6 +152,11 @@ export const Wild2: CelestialBody = {
   type: 'comet',
   radius: 2.0,
   color: BODY_COLORS.comet,
+  discovery: {
+    by: 'Paul Wild',
+    year: 1978,
+    date: 'January 6, 1978',
+  },
   elements: {
     a: 3.449,
     e: 0.5389,
@@ -140,6 +175,11 @@ export const Borrelly: CelestialBody = {
   type: 'comet',
   radius: 4.0,
   color: BODY_COLORS.comet,
+  discovery: {
+    by: 'Alphonse Borrelly',
+    year: 1904,
+    date: 'December 28, 1904',
+  },
   elements: {
     a: 3.611,
     e: 0.6238,

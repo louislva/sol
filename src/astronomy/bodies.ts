@@ -48,6 +48,13 @@ export interface CelestialBody {
 
   // Display options
   hideOrbit?: boolean;               // Don't render orbit path
+
+  // Discovery information (for natural bodies)
+  discovery?: {
+    by?: string;                     // Discoverer name(s)
+    year?: number;                   // Year of discovery (undefined = known since antiquity)
+    date?: string;                   // Specific date if known (e.g., "January 7, 1610")
+  };
 }
 
 // Get orbital elements for a given date (handles segmented orbits)
@@ -154,6 +161,9 @@ export const Mercury: CelestialBody = {
   type: 'planet',
   radius: 2439.7,
   color: PLANET_COLORS.mercury,
+  discovery: {
+    // Known since antiquity - visible to naked eye
+  },
   elements: {
     a: 0.38709927,
     e: 0.20563593,
@@ -175,6 +185,9 @@ export const Venus: CelestialBody = {
   type: 'planet',
   radius: 6051.8,
   color: PLANET_COLORS.venus,
+  discovery: {
+    // Known since antiquity - visible to naked eye
+  },
   elements: {
     a: 0.72333566,
     e: 0.00677672,
@@ -196,6 +209,9 @@ export const Earth: CelestialBody = {
   type: 'planet',
   radius: 6371,
   color: PLANET_COLORS.earth,
+  discovery: {
+    // Our home planet
+  },
   elements: {
     a: 1.00000261,
     e: 0.01671123,
@@ -217,6 +233,9 @@ export const Mars: CelestialBody = {
   type: 'planet',
   radius: 3389.5,
   color: PLANET_COLORS.mars,
+  discovery: {
+    // Known since antiquity - visible to naked eye
+  },
   elements: {
     a: 1.52371034,
     e: 0.09339410,
@@ -238,6 +257,9 @@ export const Jupiter: CelestialBody = {
   type: 'planet',
   radius: 69911,
   color: PLANET_COLORS.jupiter,
+  discovery: {
+    // Known since antiquity - visible to naked eye
+  },
   elements: {
     a: 5.20288700,
     e: 0.04838624,
@@ -259,6 +281,9 @@ export const Saturn: CelestialBody = {
   type: 'planet',
   radius: 58232,
   color: PLANET_COLORS.saturn,
+  discovery: {
+    // Known since antiquity - visible to naked eye
+  },
   elements: {
     a: 9.53667594,
     e: 0.05386179,
@@ -280,6 +305,11 @@ export const Uranus: CelestialBody = {
   type: 'planet',
   radius: 25362,
   color: PLANET_COLORS.uranus,
+  discovery: {
+    by: 'William Herschel',
+    year: 1781,
+    date: 'March 13, 1781',
+  },
   elements: {
     a: 19.18916464,
     e: 0.04725744,
@@ -301,6 +331,11 @@ export const Neptune: CelestialBody = {
   type: 'planet',
   radius: 24622,
   color: PLANET_COLORS.neptune,
+  discovery: {
+    by: 'Johann Galle',
+    year: 1846,
+    date: 'September 23, 1846',
+  },
   elements: {
     a: 30.06992276,
     e: 0.00859048,
@@ -330,6 +365,11 @@ export const Pluto: CelestialBody = {
   type: 'dwarf',
   radius: 1188.3,
   color: '#aa9988', // Tan/brownish
+  discovery: {
+    by: 'Clyde Tombaugh',
+    year: 1930,
+    date: 'February 18, 1930',
+  },
   elements: {
     a: 39.48211675,
     e: 0.24882730,
@@ -351,6 +391,11 @@ export const Ceres: CelestialBody = {
   type: 'dwarf',
   radius: 473,
   color: '#777777', // Gray
+  discovery: {
+    by: 'Giuseppe Piazzi',
+    year: 1801,
+    date: 'January 1, 1801',
+  },
   elements: {
     a: 2.7691651545,
     e: 0.0760090291,
@@ -367,6 +412,11 @@ export const Eris: CelestialBody = {
   type: 'dwarf',
   radius: 1163,
   color: '#dddddd', // Bright gray/white
+  discovery: {
+    by: 'Michael Brown, Chad Trujillo, David Rabinowitz',
+    year: 2005,
+    date: 'January 5, 2005',
+  },
   elements: {
     a: 67.864,
     e: 0.44068,
@@ -383,6 +433,11 @@ export const Makemake: CelestialBody = {
   type: 'dwarf',
   radius: 715,
   color: '#cc9966', // Reddish-brown
+  discovery: {
+    by: 'Michael Brown, Chad Trujillo, David Rabinowitz',
+    year: 2005,
+    date: 'March 31, 2005',
+  },
   elements: {
     a: 45.430,
     e: 0.16126,
@@ -399,6 +454,11 @@ export const Haumea: CelestialBody = {
   type: 'dwarf',
   radius: 816,               // Mean radius (elongated shape)
   color: '#eeeeee',          // Very bright
+  discovery: {
+    by: 'Michael Brown, Chad Trujillo, David Rabinowitz',
+    year: 2004,
+    date: 'December 28, 2004',
+  },
   elements: {
     a: 43.182,
     e: 0.19642,
