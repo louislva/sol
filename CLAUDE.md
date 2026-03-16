@@ -127,6 +127,10 @@ Labels fade earlier (32-64px from parent edge).
 - [ ] Jump to specific date
 - [ ] Scale reference overlay
 
+## Browser Debugging
+
+When using the browser (DevTools MCP) to interact with the app, always set speed to realtime first (`sol.setSpeed("realtime")`) so that bodies stop moving and you can navigate precisely.
+
 ## Console API (`window.sol`)
 
 The app exposes a `window.sol` object for programmatic control via the browser console or DevTools MCP. Type `sol.help()` for a quick reference.
