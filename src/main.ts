@@ -380,7 +380,231 @@ function animate(): void {
 // Start the animation
 animate();
 
+// ── Console API ──────────────────────────────────────────────────────
+// Expose control functions on window.sol for devtools / MCP automation
+
+const AU_KM_CONST = 149597870.7;
+
+interface SolAPI {
+  // Navigation
+  goto(bodyName: string): string;
+  pan(dx: number, dy: number): string;
+  panTo(x: number, y: number): string;
+  panToAU(x: number, y: number): string;
+  zoom(level: number): string;
+  zoomIn(factor?: number): string;
+  zoomOut(factor?: number): string;
+
+  // Time
+  setDate(dateStr: string): string;
+  setSpeed(mode: SpeedMode): string;
+  setTimeScale(scale: number): string;
+  pause(): string;
+  resume(): string;
+  getDate(): string;
+
+  // Info
+  listBodies(): string[];
+  findBody(query: string): string[];
+  getBody(name: string): { name: string; type: string; x: number; y: number; xAU: number; yAU: number } | null;
+  status(): { date: string; speed: string; zoom: number; center: { x: number; y: number }; centerAU: { x: number; y: number } };
+
+  // Selection
+  select(bodyName: string): string;
+  deselect(): string;
+
+  help(): void;
+}
+
+const sol: SolAPI = {
+  // ── Navigation ──
+
+  goto(bodyName: string) {
+    const body = bodies.find(b => b.name.toLowerCase() === bodyName.toLowerCase());
+    if (!body) return `Body "${bodyName}" not found. Use sol.findBody("${bodyName}") to search.`;
+    const pos = getBodyPosition(body, time.currentJulian);
+    camera.x = pos.x;
+    camera.y = pos.y;
+    // Auto-zoom based on body type
+    const zoomLevels: Record<string, number> = {
+      star: 0.000001,
+      planet: 0.00005,
+      'dwarf-planet': 0.0001,
+      moon: 0.001,
+      comet: 0.00005,
+      probe: 0.00005,
+      satellite: 0.01,
+    };
+    const targetZoom = zoomLevels[body.type] || 0.00005;
+    camera['_zoom'] = targetZoom;
+    camera['_targetZoom'] = targetZoom;
+    return `Navigated to ${body.name} at (${(pos.x / AU_KM_CONST).toFixed(3)} AU, ${(pos.y / AU_KM_CONST).toFixed(3)} AU)`;
+  },
+
+  pan(dx: number, dy: number) {
+    camera.x += dx * AU_KM_CONST;
+    camera.y += dy * AU_KM_CONST;
+    return `Panned by (${dx} AU, ${dy} AU). Center now at (${(camera.x / AU_KM_CONST).toFixed(3)} AU, ${(camera.y / AU_KM_CONST).toFixed(3)} AU)`;
+  },
+
+  panTo(x: number, y: number) {
+    camera.x = x;
+    camera.y = y;
+    return `Camera center set to (${x} km, ${y} km)`;
+  },
+
+  panToAU(x: number, y: number) {
+    camera.x = x * AU_KM_CONST;
+    camera.y = y * AU_KM_CONST;
+    return `Camera center set to (${x} AU, ${y} AU)`;
+  },
+
+  zoom(level: number) {
+    camera['_zoom'] = level;
+    camera['_targetZoom'] = level;
+    return `Zoom set to ${level.toExponential(2)}`;
+  },
+
+  zoomIn(factor = 3) {
+    const newZoom = Math.min(1, camera.zoom * factor);
+    camera['_zoom'] = newZoom;
+    camera['_targetZoom'] = newZoom;
+    return `Zoomed in to ${newZoom.toExponential(2)}`;
+  },
+
+  zoomOut(factor = 3) {
+    const newZoom = Math.max(1e-12, camera.zoom / factor);
+    camera['_zoom'] = newZoom;
+    camera['_targetZoom'] = newZoom;
+    return `Zoomed out to ${newZoom.toExponential(2)}`;
+  },
+
+  // ── Time ──
+
+  setDate(dateStr: string) {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return `Invalid date: "${dateStr}". Use ISO format like "2024-01-15".`;
+    time.setDate(date);
+    return `Date set to ${time.formatDate()}`;
+  },
+
+  setSpeed(mode: SpeedMode) {
+    time.setSpeedMode(mode);
+    // Update UI button state
+    speedButtons.forEach(b => {
+      b.classList.toggle('active', b.dataset.speed === mode);
+    });
+    return `Speed mode set to "${mode}"`;
+  },
+
+  setTimeScale(scale: number) {
+    time.setTimeScale(scale);
+    return `Time scale set to ${scale} (${scale / 86400} days/sec)`;
+  },
+
+  pause() {
+    time.setTimeScale(0);
+    return 'Paused';
+  },
+
+  resume() {
+    sol.setSpeed('auto');
+    return 'Resumed with auto speed';
+  },
+
+  getDate() {
+    return time.formatDate();
+  },
+
+  // ── Info ──
+
+  listBodies() {
+    return bodies.map(b => b.name);
+  },
+
+  findBody(query: string) {
+    const q = query.toLowerCase();
+    return bodies.filter(b => b.name.toLowerCase().includes(q)).map(b => `${b.name} (${b.type})`);
+  },
+
+  getBody(name: string) {
+    const body = bodies.find(b => b.name.toLowerCase() === name.toLowerCase());
+    if (!body) return null;
+    const pos = getBodyPosition(body, time.currentJulian);
+    return {
+      name: body.name,
+      type: body.type,
+      x: pos.x,
+      y: pos.y,
+      xAU: pos.x / AU_KM_CONST,
+      yAU: pos.y / AU_KM_CONST,
+    };
+  },
+
+  status() {
+    return {
+      date: time.formatDate(),
+      speed: `${time.timeScale.toFixed(0)} sec/sec (${time.speedMode})`,
+      zoom: camera.zoom,
+      center: { x: camera.x, y: camera.y },
+      centerAU: { x: camera.x / AU_KM_CONST, y: camera.y / AU_KM_CONST },
+    };
+  },
+
+  // ── Selection ──
+
+  select(bodyName: string) {
+    const body = bodies.find(b => b.name.toLowerCase() === bodyName.toLowerCase());
+    if (!body) return `Body "${bodyName}" not found.`;
+    sidebar.show(body, time.currentJulian);
+    renderer.setSelectedBody(body.name);
+    return `Selected ${body.name}`;
+  },
+
+  deselect() {
+    sidebar.hide();
+    renderer.setSelectedBody(null);
+    return 'Deselected';
+  },
+
+  // ── Help ──
+
+  help() {
+    console.log(`%c🌍 sol — Console API`, 'font-size: 14px; font-weight: bold; color: #4fc3f7');
+    console.log(`
+Navigation:
+  sol.goto("Earth")          Navigate camera to a body (auto-zooms)
+  sol.pan(1, 0)              Pan by offset in AU
+  sol.panToAU(1, 0)          Pan to absolute position in AU
+  sol.zoom(0.0001)           Set zoom level (pixels/km)
+  sol.zoomIn(3)              Zoom in by factor (default 3x)
+  sol.zoomOut(3)             Zoom out by factor (default 3x)
+
+Time:
+  sol.setDate("2024-07-04")  Jump to a specific date
+  sol.setSpeed("year")       Set speed: auto|realtime|day|month|year
+  sol.setTimeScale(86400)    Set exact time scale (sec/sec)
+  sol.pause()                Pause time
+  sol.resume()               Resume with auto speed
+  sol.getDate()              Get current date
+
+Info:
+  sol.listBodies()           List all body names
+  sol.findBody("mars")       Search bodies by name
+  sol.getBody("Earth")       Get body position and info
+  sol.status()               Get camera, time, zoom status
+
+Selection:
+  sol.select("Jupiter")      Select a body (opens sidebar)
+  sol.deselect()             Clear selection
+    `);
+  },
+};
+
+(window as any).sol = sol;
+
 console.log('Solar System initialized');
+console.log('%cType sol.help() for console API', 'color: #4fc3f7; font-weight: bold');
 console.log('Canvas size:', canvas.width, 'x', canvas.height);
 console.log('Camera size:', camera.width, 'x', camera.height);
 console.log('Camera zoom:', camera.zoom);

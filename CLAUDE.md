@@ -127,6 +127,45 @@ Labels fade earlier (32-64px from parent edge).
 - [ ] Jump to specific date
 - [ ] Scale reference overlay
 
+## Console API (`window.sol`)
+
+The app exposes a `window.sol` object for programmatic control via the browser console or DevTools MCP. Type `sol.help()` for a quick reference.
+
+### Navigation
+```js
+sol.goto("Earth")          // Center camera on a body (auto-zooms by type)
+sol.pan(1, 0)              // Pan by offset in AU
+sol.panToAU(1, 0)          // Pan to absolute position in AU
+sol.panTo(x, y)            // Pan to absolute position in km
+sol.zoom(0.0001)           // Set zoom level directly (pixels/km)
+sol.zoomIn(3)              // Zoom in by factor (default 3x)
+sol.zoomOut(3)             // Zoom out by factor (default 3x)
+```
+
+### Time
+```js
+sol.setDate("2024-07-04")  // Jump to a specific date (ISO format)
+sol.setSpeed("year")       // Set speed mode: auto|realtime|day|month|year
+sol.setTimeScale(86400)    // Set exact time scale (simulated sec per real sec)
+sol.pause()                // Pause time (sets scale to 0)
+sol.resume()               // Resume with auto speed
+sol.getDate()              // Get current simulation date string
+```
+
+### Info
+```js
+sol.listBodies()           // List all body names (string[])
+sol.findBody("mars")       // Search bodies by name substring
+sol.getBody("Earth")       // Get body name, type, position (km and AU)
+sol.status()               // Get camera center, zoom, date, speed info
+```
+
+### Selection
+```js
+sol.select("Jupiter")      // Select a body (opens info sidebar)
+sol.deselect()             // Clear selection
+```
+
 ## Data Sources
 - **Planets**: NASA JPL Horizons (https://ssd.jpl.nasa.gov/planets/approx_pos.html)
 - **Moons**: NASA JPL Horizons API (https://ssd.jpl.nasa.gov/api/horizons.api)
