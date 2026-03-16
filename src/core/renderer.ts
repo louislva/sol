@@ -696,6 +696,120 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  // Render a Google Maps-style scale bar in the bottom right
+  private renderScaleBar(): void {
+    const LIGHT_SECOND_KM = 299792.458;
+
+    // Define units in ascending order of size (in km)
+    const units: Array<{ name: string; km: number }> = [
+      { name: "light-sec", km: LIGHT_SECOND_KM },
+      { name: "light-min", km: LIGHT_SECOND_KM * 60 },
+      { name: "light-hr", km: LIGHT_SECOND_KM * 3600 },
+      { name: "light-day", km: LIGHT_SECOND_KM * 86400 },
+      { name: "light-yr", km: LIGHT_SECOND_KM * 86400 * 365.25 },
+    ];
+
+    // Nice step values
+    const niceNumbers = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+
+    // Target bar width in pixels
+    const minBarPx = 80;
+    const maxBarPx = 250;
+
+    // Find the best unit + nice number combo
+    let bestLabel = "";
+    let bestBarPx = 0;
+
+    for (const unit of units) {
+      for (const n of niceNumbers) {
+        const distKm = n * unit.km;
+        const barPx = distKm * this.camera.zoom;
+
+        if (barPx >= minBarPx && barPx <= maxBarPx) {
+          // Check if this is closer to target than current best
+          if (
+            bestBarPx === 0 ||
+            Math.abs(barPx - 150) < Math.abs(bestBarPx - 150)
+          ) {
+            bestBarPx = barPx;
+            bestLabel = `${n} ${unit.name}${n !== 1 ? "s" : ""}`;
+          }
+        }
+      }
+    }
+
+    // Fallback: if no light-time unit fits, use AU
+    if (bestBarPx === 0) {
+      const AU_KM = 149597870.7;
+      for (const n of niceNumbers) {
+        const distKm = n * AU_KM;
+        const barPx = distKm * this.camera.zoom;
+        if (barPx >= minBarPx && barPx <= maxBarPx) {
+          if (
+            bestBarPx === 0 ||
+            Math.abs(barPx - 150) < Math.abs(bestBarPx - 150)
+          ) {
+            bestBarPx = barPx;
+            bestLabel = `${n} AU`;
+          }
+        }
+      }
+    }
+
+    // Fallback: if still nothing (extremely zoomed in), use km
+    if (bestBarPx === 0) {
+      const kmNice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+      for (const n of kmNice) {
+        const barPx = n * this.camera.zoom;
+        if (barPx >= minBarPx && barPx <= maxBarPx) {
+          if (
+            bestBarPx === 0 ||
+            Math.abs(barPx - 150) < Math.abs(bestBarPx - 150)
+          ) {
+            bestBarPx = barPx;
+            bestLabel = n >= 1000 ? `${n / 1000}k km` : `${n} km`;
+          }
+        }
+      }
+    }
+
+    if (bestBarPx === 0) return; // Nothing fits
+
+    // Position: bottom right with padding
+    const padding = 24;
+    const tickHeight = 6;
+    const barY = this.camera.height - padding;
+    const barX = this.camera.width - padding - bestBarPx;
+
+    this.ctx.save();
+
+    // Draw the bar line
+    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    this.ctx.lineWidth = 1.5;
+    this.ctx.beginPath();
+
+    // Left tick
+    this.ctx.moveTo(barX, barY - tickHeight);
+    this.ctx.lineTo(barX, barY);
+
+    // Horizontal line
+    this.ctx.lineTo(barX + bestBarPx, barY);
+
+    // Right tick
+    this.ctx.lineTo(barX + bestBarPx, barY - tickHeight);
+
+    this.ctx.stroke();
+
+    // Draw label centered above the bar
+    this.ctx.font = '11px "Space Mono", monospace';
+    this.ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "bottom";
+    this.ctx.fillText(bestLabel, barX + bestBarPx / 2, barY - tickHeight - 4);
+
+    this.ctx.restore();
+  }
+
   renderAll(bodies: CelestialBody[], julianDate: number, asteroidBelt?: AsteroidBelt): void {
     this.clear();
 
@@ -722,6 +836,9 @@ export class Renderer {
     for (const body of bodies) {
       this.renderBody(body, julianDate);
     }
+
+    // Draw scale indicator on top
+    this.renderScaleBar();
   }
 
   // Internal asteroid rendering (called from renderAll)
