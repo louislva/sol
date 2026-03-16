@@ -699,41 +699,73 @@ export class Renderer {
   // Render a Google Maps-style scale bar in the bottom right
   private renderScaleBar(): void {
     const LIGHT_SECOND_KM = 299792.458;
+    const ls = LIGHT_SECOND_KM;
 
-    // Define units in ascending order of size (in km)
-    const units: Array<{ name: string; km: number }> = [
-      { name: "light-sec", km: LIGHT_SECOND_KM },
-      { name: "light-min", km: LIGHT_SECOND_KM * 60 },
-      { name: "light-hr", km: LIGHT_SECOND_KM * 3600 },
-      { name: "light-day", km: LIGHT_SECOND_KM * 86400 },
-      { name: "light-yr", km: LIGHT_SECOND_KM * 86400 * 365.25 },
+    // Explicit scale steps: [km distance, label]
+    // Use the smallest natural unit — no "1 light-min", use "60 light-secs" instead
+    const steps: Array<[number, string]> = [
+      // light-seconds: 1–90
+      [1 * ls, "1 light-sec"],
+      [2 * ls, "2 light-secs"],
+      [3 * ls, "3 light-secs"],
+      [5 * ls, "5 light-secs"],
+      [10 * ls, "10 light-secs"],
+      [15 * ls, "15 light-secs"],
+      [20 * ls, "20 light-secs"],
+      [30 * ls, "30 light-secs"],
+      [45 * ls, "45 light-secs"],
+      [60 * ls, "60 light-secs"],
+      [90 * ls, "90 light-secs"],
+      // light-minutes: 2+
+      [2 * 60 * ls, "2 light-mins"],
+      [3 * 60 * ls, "3 light-mins"],
+      [5 * 60 * ls, "5 light-mins"],
+      [10 * 60 * ls, "10 light-mins"],
+      [15 * 60 * ls, "15 light-mins"],
+      [20 * 60 * ls, "20 light-mins"],
+      [30 * 60 * ls, "30 light-mins"],
+      [45 * 60 * ls, "45 light-mins"],
+      [60 * 60 * ls, "60 light-mins"],
+      [90 * 60 * ls, "90 light-mins"],
+      // light-hours: 2+
+      [2 * 3600 * ls, "2 light-hrs"],
+      [3 * 3600 * ls, "3 light-hrs"],
+      [5 * 3600 * ls, "5 light-hrs"],
+      [10 * 3600 * ls, "10 light-hrs"],
+      [15 * 3600 * ls, "15 light-hrs"],
+      [20 * 3600 * ls, "20 light-hrs"],
+      // light-days: 2+
+      [2 * 86400 * ls, "2 light-days"],
+      [3 * 86400 * ls, "3 light-days"],
+      [5 * 86400 * ls, "5 light-days"],
+      [10 * 86400 * ls, "10 light-days"],
+      [20 * 86400 * ls, "20 light-days"],
+      [50 * 86400 * ls, "50 light-days"],
+      [100 * 86400 * ls, "100 light-days"],
+      [200 * 86400 * ls, "200 light-days"],
+      // light-years
+      [86400 * 365.25 * ls, "1 light-yr"],
+      [2 * 86400 * 365.25 * ls, "2 light-yrs"],
+      [5 * 86400 * 365.25 * ls, "5 light-yrs"],
     ];
-
-    // Nice step values
-    const niceNumbers = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
 
     // Target bar width in pixels
     const minBarPx = 80;
     const maxBarPx = 250;
 
-    // Find the best unit + nice number combo
+    // Find the best step
     let bestLabel = "";
     let bestBarPx = 0;
 
-    for (const unit of units) {
-      for (const n of niceNumbers) {
-        const distKm = n * unit.km;
-        const barPx = distKm * this.camera.zoom;
-
-        if (barPx >= minBarPx && barPx <= maxBarPx) {
-          // Check if this is closer to target than current best
-          if (
-            bestBarPx === 0 ||
-            Math.abs(barPx - 150) < Math.abs(bestBarPx - 150)
-          ) {
-            bestBarPx = barPx;
-            bestLabel = `${n} ${unit.name}${n !== 1 ? "s" : ""}`;
-          }
+    for (const [km, label] of steps) {
+      const barPx = km * this.camera.zoom;
+      if (barPx >= minBarPx && barPx <= maxBarPx) {
+        if (
+          bestBarPx === 0 ||
+          Math.abs(barPx - 150) < Math.abs(bestBarPx - 150)
+        ) {
+          bestBarPx = barPx;
+          bestLabel = label;
         }
       }
     }
@@ -741,7 +773,8 @@ export class Renderer {
     // Fallback: if no light-time unit fits, use AU
     if (bestBarPx === 0) {
       const AU_KM = 149597870.7;
-      for (const n of niceNumbers) {
+      const auNice = [1, 1.5, 2, 3, 5, 7.5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000];
+      for (const n of auNice) {
         const distKm = n * AU_KM;
         const barPx = distKm * this.camera.zoom;
         if (barPx >= minBarPx && barPx <= maxBarPx) {
@@ -758,7 +791,7 @@ export class Renderer {
 
     // Fallback: if still nothing (extremely zoomed in), use km
     if (bestBarPx === 0) {
-      const kmNice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+      const kmNice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 150000, 200000, 300000];
       for (const n of kmNice) {
         const barPx = n * this.camera.zoom;
         if (barPx >= minBarPx && barPx <= maxBarPx) {
