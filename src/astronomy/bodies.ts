@@ -55,6 +55,14 @@ export interface CelestialBody {
     year?: number;                   // Year of discovery (undefined = known since antiquity)
     date?: string;                   // Specific date if known (e.g., "January 7, 1610")
   };
+
+  // Ring system (e.g., Saturn's rings)
+  rings?: Array<{
+    innerRadius: number;  // km from planet center
+    outerRadius: number;  // km from planet center
+    color: string;        // hex color
+    opacity: number;      // 0-1
+  }>;
 }
 
 // Get orbital elements for a given date (handles segmented orbits)
@@ -298,6 +306,22 @@ export const Saturn: CelestialBody = {
     longPeriDot: -0.41897216,
     longNodeDot: -0.28867794,
   },
+  rings: [
+    // D ring (faint innermost)
+    { innerRadius: 66900, outerRadius: 74510, color: '#f0e0c0', opacity: 0.03 },
+    // C ring
+    { innerRadius: 74658, outerRadius: 92000, color: '#e8d4b0', opacity: 0.09 },
+    // B ring (brightest, densest)
+    { innerRadius: 92000, outerRadius: 117580, color: '#f5e8d0', opacity: 0.275 },
+    // Cassini Division (gap)
+    { innerRadius: 117580, outerRadius: 122170, color: '#d0c0a0', opacity: 0.02 },
+    // A ring (bright)
+    { innerRadius: 122170, outerRadius: 136775, color: '#eedcb8', opacity: 0.20 },
+    // Encke Gap (thin gap in A ring)
+    { innerRadius: 133589, outerRadius: 133740, color: '#d0c0a0', opacity: 0.015 },
+    // F ring (narrow outermost)
+    { innerRadius: 139826, outerRadius: 140612, color: '#f0dcc0', opacity: 0.125 },
+  ],
 };
 
 export const Uranus: CelestialBody = {

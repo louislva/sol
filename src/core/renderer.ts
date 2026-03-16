@@ -262,6 +262,11 @@ export class Renderer {
       }
     }
 
+    // Draw rings (e.g., Saturn) after the body
+    if (body.rings && body.rings.length > 0) {
+      this.renderRings(body, screenPos.x, screenPos.y, occlusionOpacity);
+    }
+
     // Draw selection ring around selected body
     if (isSelected) {
       this.ctx.beginPath();
@@ -618,6 +623,72 @@ export class Renderer {
     this.ctx.arc(x - bodyW / 2 + wheelR, y + bodyH / 2, wheelR, 0, Math.PI * 2);
     this.ctx.arc(x + bodyW / 2 - wheelR, y + bodyH / 2, wheelR, 0, Math.PI * 2);
     this.ctx.fill();
+  }
+
+  // Render planetary rings (e.g., Saturn's rings) with dusty particle texture
+  private renderRings(
+    body: CelestialBody,
+    screenX: number,
+    screenY: number,
+    occlusionOpacity: number
+  ): void {
+    if (!body.rings) return;
+
+    this.ctx.save();
+    this.ctx.translate(screenX, screenY);
+
+    for (const ring of body.rings) {
+      const innerPx = this.camera.kmToPixels(ring.innerRadius);
+      const outerPx = this.camera.kmToPixels(ring.outerRadius);
+
+      // Skip rings too small to see
+      if (outerPx < 1) continue;
+
+      const bandWidth = outerPx - innerPx;
+
+      if (bandWidth < 0.5) {
+        // Very thin ring - draw as a single circle stroke
+        const midPx = (innerPx + outerPx) / 2;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, midPx, 0, Math.PI * 2);
+        this.ctx.strokeStyle = ring.color;
+        this.ctx.lineWidth = Math.max(bandWidth, 0.5);
+        this.ctx.globalAlpha = ring.opacity * occlusionOpacity;
+        this.ctx.stroke();
+      } else if (bandWidth < 8) {
+        // Medium ring - draw as filled ring
+        this.ctx.globalAlpha = ring.opacity * occlusionOpacity;
+        this.ctx.fillStyle = ring.color;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, outerPx, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, innerPx, 0, Math.PI * 2);
+        this.ctx.fill('evenodd');
+      } else {
+        // Wide ring - draw with radial sub-bands for subtle dusty texture
+        const numBands = Math.min(Math.ceil(bandWidth / 1.5), 60);
+        for (let b = 0; b < numBands; b++) {
+          const t = b / numBands;
+          const t2 = (b + 1) / numBands;
+          const r1 = innerPx + t * bandWidth;
+          const r2 = innerPx + t2 * bandWidth;
+
+          // Gentle density variation - subtle waviness, not harsh bands
+          const noise = Math.sin(t * 31.4) * 0.08 + Math.sin(t * 71.2) * 0.06 + Math.sin(t * 17.9) * 0.04;
+          // Fade edges of ring slightly for softness
+          const edgeFade = Math.min(t * 5, (1 - t) * 5, 1);
+          const subOpacity = ring.opacity * (0.92 + noise) * edgeFade * occlusionOpacity;
+
+          this.ctx.globalAlpha = Math.max(0, Math.min(1, subOpacity));
+          this.ctx.fillStyle = ring.color;
+          this.ctx.beginPath();
+          this.ctx.arc(0, 0, r2, 0, Math.PI * 2);
+          this.ctx.arc(0, 0, r1, 0, Math.PI * 2);
+          this.ctx.fill('evenodd');
+        }
+      }
+    }
+
+    this.ctx.restore();
   }
 
   renderAll(bodies: CelestialBody[], julianDate: number, asteroidBelt?: AsteroidBelt): void {
