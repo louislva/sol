@@ -634,6 +634,11 @@ export class Renderer {
   ): void {
     if (!body.rings) return;
 
+    // Only show rings when planet is large enough on screen, fade in from 30-35px
+    const bodyRadiusPx = this.camera.kmToPixels(body.radius);
+    if (bodyRadiusPx < 30) return;
+    const ringFade = Math.min((bodyRadiusPx - 30) / 5, 1);
+
     this.ctx.save();
     this.ctx.translate(screenX, screenY);
 
@@ -653,11 +658,11 @@ export class Renderer {
         this.ctx.arc(0, 0, midPx, 0, Math.PI * 2);
         this.ctx.strokeStyle = ring.color;
         this.ctx.lineWidth = Math.max(bandWidth, 0.5);
-        this.ctx.globalAlpha = ring.opacity * occlusionOpacity;
+        this.ctx.globalAlpha = ring.opacity * occlusionOpacity * ringFade;
         this.ctx.stroke();
       } else if (bandWidth < 8) {
         // Medium ring - draw as filled ring
-        this.ctx.globalAlpha = ring.opacity * occlusionOpacity;
+        this.ctx.globalAlpha = ring.opacity * occlusionOpacity * ringFade;
         this.ctx.fillStyle = ring.color;
         this.ctx.beginPath();
         this.ctx.arc(0, 0, outerPx, 0, Math.PI * 2);
@@ -676,7 +681,7 @@ export class Renderer {
           const noise = Math.sin(t * 31.4) * 0.08 + Math.sin(t * 71.2) * 0.06 + Math.sin(t * 17.9) * 0.04;
           // Fade edges of ring slightly for softness
           const edgeFade = Math.min(t * 5, (1 - t) * 5, 1);
-          const subOpacity = ring.opacity * (0.92 + noise) * edgeFade * occlusionOpacity;
+          const subOpacity = ring.opacity * (0.92 + noise) * edgeFade * occlusionOpacity * ringFade;
 
           this.ctx.globalAlpha = Math.max(0, Math.min(1, subOpacity));
           this.ctx.fillStyle = ring.color;

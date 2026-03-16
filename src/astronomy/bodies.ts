@@ -308,19 +308,19 @@ export const Saturn: CelestialBody = {
   },
   rings: [
     // D ring (faint innermost)
-    { innerRadius: 66900, outerRadius: 74510, color: '#f0e0c0', opacity: 0.03 },
+    { innerRadius: 66900, outerRadius: 74510, color: '#f0e0c0', opacity: 0.045 },
     // C ring
-    { innerRadius: 74658, outerRadius: 92000, color: '#e8d4b0', opacity: 0.09 },
+    { innerRadius: 74658, outerRadius: 92000, color: '#e8d4b0', opacity: 0.135 },
     // B ring (brightest, densest)
-    { innerRadius: 92000, outerRadius: 117580, color: '#f5e8d0', opacity: 0.275 },
+    { innerRadius: 92000, outerRadius: 117580, color: '#f5e8d0', opacity: 0.4125 },
     // Cassini Division (gap)
-    { innerRadius: 117580, outerRadius: 122170, color: '#d0c0a0', opacity: 0.02 },
+    { innerRadius: 117580, outerRadius: 122170, color: '#d0c0a0', opacity: 0.03 },
     // A ring (bright)
-    { innerRadius: 122170, outerRadius: 136775, color: '#eedcb8', opacity: 0.20 },
+    { innerRadius: 122170, outerRadius: 136775, color: '#eedcb8', opacity: 0.30 },
     // Encke Gap (thin gap in A ring)
-    { innerRadius: 133589, outerRadius: 133740, color: '#d0c0a0', opacity: 0.015 },
+    { innerRadius: 133589, outerRadius: 133740, color: '#d0c0a0', opacity: 0.0225 },
     // F ring (narrow outermost)
-    { innerRadius: 139826, outerRadius: 140612, color: '#f0dcc0', opacity: 0.125 },
+    { innerRadius: 139826, outerRadius: 140612, color: '#f0dcc0', opacity: 0.1875 },
   ],
 };
 
