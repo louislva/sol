@@ -71,6 +71,23 @@ export class Camera {
     let zoomAnchorWorld: { x: number; y: number } | null = null;
     let zoomAnchorScreen: { x: number; y: number } | null = null;
 
+    const getCanvasPoint = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+
+    const setImmediateZoomAroundPoint = (
+      zoom: number,
+      screenPoint: { x: number; y: number },
+      worldPoint: { x: number; y: number }
+    ) => {
+      const clampedZoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoom));
+      this._zoom = clampedZoom;
+      this._targetZoom = clampedZoom;
+      this.x = worldPoint.x - (screenPoint.x - this.width / 2) / clampedZoom;
+      this.y = worldPoint.y - (screenPoint.y - this.height / 2) / clampedZoom;
+    };
+
     // Smooth zoom animation that keeps anchor point stable
     const animateZoom = () => {
       const targetZoom = this._targetZoom;
@@ -125,7 +142,10 @@ export class Camera {
       }
 
       // Normalize scroll delta across browsers/devices
-      const delta = -e.deltaY * 0.0035;
+      // Browsers expose trackpad pinch as Ctrl+wheel. It uses much smaller
+      // deltas than ordinary scrolling, so give it pinch-appropriate gain.
+      const sensitivity = e.ctrlKey ? 0.01 : 0.0035;
+      const delta = -e.deltaY * sensitivity;
 
       // Use exponential zoom for consistent feel at all scales
       const zoomFactor = Math.exp(delta);
@@ -160,6 +180,140 @@ export class Camera {
     canvas.addEventListener('mouseleave', () => {
       this.isPanning = false;
     });
+
+    // Touch input: one-finger pan and midpoint-anchored two-finger pinch.
+    const touchPoints = new Map<number, { x: number; y: number }>();
+    let lastTouchCenter: { x: number; y: number } | null = null;
+    let lastTouchDistance = 0;
+    let touchTravel = 0;
+    let suppressNextClick = false;
+
+    const getFirstTwoTouchPoints = () => {
+      const points = touchPoints.values();
+      const first = points.next().value as { x: number; y: number } | undefined;
+      const second = points.next().value as { x: number; y: number } | undefined;
+      return first && second ? [first, second] as const : null;
+    };
+
+    const updateTouchReference = () => {
+      const pair = getFirstTwoTouchPoints();
+      if (pair) {
+        const [first, second] = pair;
+        lastTouchCenter = {
+          x: (first.x + second.x) / 2,
+          y: (first.y + second.y) / 2,
+        };
+        lastTouchDistance = Math.hypot(second.x - first.x, second.y - first.y);
+        return;
+      }
+
+      const remaining = touchPoints.values().next().value as { x: number; y: number } | undefined;
+      lastTouchCenter = remaining || null;
+      lastTouchDistance = 0;
+    };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      canvas.setPointerCapture(e.pointerId);
+      touchPoints.set(e.pointerId, getCanvasPoint(e.clientX, e.clientY));
+      if (touchPoints.size === 1) touchTravel = 0;
+      if (touchPoints.size > 1) touchTravel = Infinity;
+      updateTouchReference();
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'touch' || !touchPoints.has(e.pointerId)) return;
+      e.preventDefault();
+
+      const nextPoint = getCanvasPoint(e.clientX, e.clientY);
+      const previousPoint = touchPoints.get(e.pointerId)!;
+      touchTravel += Math.hypot(nextPoint.x - previousPoint.x, nextPoint.y - previousPoint.y);
+      touchPoints.set(e.pointerId, nextPoint);
+
+      const pair = getFirstTwoTouchPoints();
+      if (pair && lastTouchCenter && lastTouchDistance > 0) {
+        const [first, second] = pair;
+        const center = {
+          x: (first.x + second.x) / 2,
+          y: (first.y + second.y) / 2,
+        };
+        const distance = Math.hypot(second.x - first.x, second.y - first.y);
+        const anchorWorld = this.screenToWorld(lastTouchCenter.x, lastTouchCenter.y);
+        setImmediateZoomAroundPoint(
+          this._zoom * distance / lastTouchDistance,
+          center,
+          anchorWorld
+        );
+        lastTouchCenter = center;
+        lastTouchDistance = distance;
+      } else if (touchPoints.size === 1 && lastTouchCenter) {
+        const dx = nextPoint.x - lastTouchCenter.x;
+        const dy = nextPoint.y - lastTouchCenter.y;
+        this.x -= dx / this._zoom;
+        this.y -= dy / this._zoom;
+        lastTouchCenter = nextPoint;
+      }
+    }, { passive: false });
+
+    const finishTouch = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      touchPoints.delete(e.pointerId);
+      if (touchPoints.size === 0 && touchTravel > 5) {
+        suppressNextClick = true;
+        window.setTimeout(() => { suppressNextClick = false; }, 500);
+      }
+      updateTouchReference();
+    };
+
+    canvas.addEventListener('pointerup', finishTouch);
+    canvas.addEventListener('pointercancel', finishTouch);
+
+    // Prevent a completed pinch or drag from becoming an accidental body click.
+    canvas.addEventListener('click', (e) => {
+      if (!suppressNextClick) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      suppressNextClick = false;
+    }, true);
+
+    // Safari on macOS exposes trackpad pinch through GestureEvents rather than
+    // Ctrl+wheel. These are intentionally typed structurally for portability.
+    type GestureLikeEvent = Event & {
+      scale: number;
+      clientX: number;
+      clientY: number;
+    };
+
+    let gestureStartZoom = this._zoom;
+    let gestureAnchorWorld: { x: number; y: number } | null = null;
+
+    canvas.addEventListener('gesturestart', ((event: Event) => {
+      const e = event as GestureLikeEvent;
+      e.preventDefault();
+      if (touchPoints.size > 0) return;
+      const screenPoint = getCanvasPoint(e.clientX, e.clientY);
+      gestureStartZoom = this._zoom;
+      gestureAnchorWorld = this.screenToWorld(screenPoint.x, screenPoint.y);
+      suppressNextClick = true;
+    }) as EventListener, { passive: false });
+
+    canvas.addEventListener('gesturechange', ((event: Event) => {
+      const e = event as GestureLikeEvent;
+      e.preventDefault();
+      if (touchPoints.size > 0) return;
+      if (!gestureAnchorWorld) return;
+      setImmediateZoomAroundPoint(
+        gestureStartZoom * e.scale,
+        getCanvasPoint(e.clientX, e.clientY),
+        gestureAnchorWorld
+      );
+    }) as EventListener, { passive: false });
+
+    canvas.addEventListener('gestureend', ((event: Event) => {
+      event.preventDefault();
+      gestureAnchorWorld = null;
+      window.setTimeout(() => { suppressNextClick = false; }, 500);
+    }) as EventListener, { passive: false });
   }
 
   // Get current visible range in AU (for debugging/display)
