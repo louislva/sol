@@ -57,13 +57,18 @@ function calculateAsteroidPosition(ast: AsteroidData, julianDate: number): Posit
   };
 }
 
-// Main asteroid belt class (LOD disabled - shows all asteroids)
+// Main asteroid belt class
 export class AsteroidBelt {
   private asteroids: AsteroidData[] = [];
 
   // Belt boundaries (AU)
   private readonly INNER_BELT = 2.1;
   private readonly OUTER_BELT = 3.3;
+  private readonly MIN_ORBIT_RADIUS = 1.5;
+  private readonly MAX_ORBIT_RADIUS = 4.5;
+
+  // Level-of-detail thresholds
+  private readonly RING_VIEW_AU = 20;
 
   // Color for rendering
   readonly color = '#888888';
@@ -77,22 +82,59 @@ export class AsteroidBelt {
     return this.asteroids.length;
   }
 
-  // Get visible asteroids (all of them - LOD disabled)
+  // Get the asteroid sample appropriate for the current view.
   getVisibleAsteroids(
-    _camera: Camera,
+    camera: Camera,
     julianDate: number
   ): Position[] {
-    return this.getAsteroidPositions(this.asteroids, julianDate);
+    // Avoid propagating any asteroid orbits when the belt is outside the viewport.
+    if (!this.isBeltInViewport(camera)) return [];
+
+    const visibleRangeAU = camera.getVisibleRangeAU();
+
+    // At solar-system scale the statistical ring is both clearer and cheaper.
+    if (visibleRangeAU > this.RING_VIEW_AU) return [];
+
+    // Once individual dots are discernible, preserve the full catalog.
+    return this.getAsteroidPositions(julianDate);
   }
 
-  // Get positions for specific asteroids
-  private getAsteroidPositions(asteroids: AsteroidData[], julianDate: number): Position[] {
-    return asteroids.map(ast => calculateAsteroidPosition(ast, julianDate));
+  // Get positions for the full asteroid catalog.
+  private getAsteroidPositions(julianDate: number): Position[] {
+    const count = this.asteroids.length;
+    const positions = new Array<Position>(count);
+
+    for (let i = 0; i < count; i++) {
+      positions[i] = calculateAsteroidPosition(this.asteroids[i], julianDate);
+    }
+
+    return positions;
   }
 
-  // Should render the statistical belt ring? (disabled - showing all asteroids)
-  shouldRenderBeltRing(_camera: Camera): boolean {
-    return false;
+  // Should render the statistical belt ring?
+  shouldRenderBeltRing(camera: Camera): boolean {
+    return camera.getVisibleRangeAU() > this.RING_VIEW_AU && this.isBeltInViewport(camera);
+  }
+
+  // Fast annulus/viewport intersection test used before any orbital propagation.
+  private isBeltInViewport(camera: Camera): boolean {
+    const halfWidthKm = camera.width / (2 * camera.zoom);
+    const halfHeightKm = camera.height / (2 * camera.zoom);
+    const minX = camera.x - halfWidthKm;
+    const maxX = camera.x + halfWidthKm;
+    const minY = camera.y - halfHeightKm;
+    const maxY = camera.y + halfHeightKm;
+
+    const closestX = Math.max(minX, Math.min(0, maxX));
+    const closestY = Math.max(minY, Math.min(0, maxY));
+    const closestDistanceKm = Math.hypot(closestX, closestY);
+
+    const farthestX = Math.max(Math.abs(minX), Math.abs(maxX));
+    const farthestY = Math.max(Math.abs(minY), Math.abs(maxY));
+    const farthestDistanceKm = Math.hypot(farthestX, farthestY);
+
+    return farthestDistanceKm >= this.MIN_ORBIT_RADIUS * AU_KM
+      && closestDistanceKm <= this.MAX_ORBIT_RADIUS * AU_KM;
   }
 
   // Get belt ring coordinates for rendering
