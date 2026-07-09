@@ -297,22 +297,19 @@ export class Renderer {
 
     // Base resolution from zoom level
     // More points when zoomed in for smoother curves
-    // Beyond 1e-8, increase again since fewer orbits are rendered at far zoom
+    // Farther views need fewer points because the projected orbits are smaller.
     let baseResolution: number;
     if (zoom > 1e-4) baseResolution = 720;
     else if (zoom > 1e-5) baseResolution = 360;
     else if (zoom > 1e-6) baseResolution = 180;
     else if (zoom > 1e-7) baseResolution = 90;
-    else if (zoom > 1e-8) baseResolution = 360;
-    else if (zoom > 1e-9)
-      baseResolution = 8000; // Far solar system - increase again
-    else baseResolution = 360; // Very far out - even more points
+    else baseResolution = 60;
 
     // For high-eccentricity orbits, increase resolution to keep aphelion smooth
     if (eccentricity > 0.9) {
-      baseResolution = Math.max(baseResolution * 5);
+      baseResolution *= 5;
     } else if (eccentricity > 0.7) {
-      baseResolution = Math.max(baseResolution * 2.5);
+      baseResolution *= 2.5;
     }
 
     return baseResolution;
