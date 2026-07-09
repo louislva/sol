@@ -292,6 +292,7 @@ function getHoveredBody(julianDate: number): HoverResult | null {
   for (const body of bodies) {
     // Skip stars (no orbit) and occluded bodies
     if (body.type === 'star' || body.fixedPosition) continue;
+    if (body.hideOrbit) continue;
     if (isOccludedByParent(body, julianDate, bodyMap)) continue;
 
     // Get orbit path (use fewer points for performance)
