@@ -141,6 +141,10 @@ window.addEventListener('resize', () => {
 // Track mouse position for hover detection
 let mouseX = 0;
 let mouseY = 0;
+let isPointerOverCanvas = false;
+let hoverNeedsUpdate = false;
+let lastHoverUpdateMs = 0;
+const HOVER_REFRESH_INTERVAL_MS = 100;
 
 // Track mouse down position to detect drag vs click
 let mouseDownX = 0;
@@ -152,9 +156,29 @@ canvas.addEventListener('mousedown', (e) => {
   mouseDownY = e.offsetY;
 });
 
+canvas.addEventListener('mouseenter', (e) => {
+  mouseX = e.offsetX;
+  mouseY = e.offsetY;
+  isPointerOverCanvas = true;
+  hoverNeedsUpdate = true;
+});
+
 canvas.addEventListener('mousemove', (e) => {
   mouseX = e.offsetX;
   mouseY = e.offsetY;
+  isPointerOverCanvas = true;
+  hoverNeedsUpdate = true;
+});
+
+canvas.addEventListener('wheel', () => {
+  hoverNeedsUpdate = true;
+}, { passive: true });
+
+canvas.addEventListener('mouseleave', () => {
+  isPointerOverCanvas = false;
+  hoverNeedsUpdate = false;
+  camera.setHoverTarget(null);
+  renderer.setHoveredBody(null);
 });
 
 // Handle click to select body
@@ -324,6 +348,23 @@ function getHoveredBody(julianDate: number): HoverResult | null {
   return null;
 }
 
+function updateHoverState(julianDate: number): void {
+  const hoverResult = getHoveredBody(julianDate);
+  if (hoverResult) {
+    // Only center zoom on direct body hits, not orbit hits.
+    if (hoverResult.isDirectHit) {
+      const pos = getBodyPosition(hoverResult.body, julianDate);
+      camera.setHoverTarget({ x: pos.x, y: pos.y });
+    } else {
+      camera.setHoverTarget(null);
+    }
+    renderer.setHoveredBody(hoverResult.body.name);
+  } else {
+    camera.setHoverTarget(null);
+    renderer.setHoveredBody(null);
+  }
+}
+
 // Track last time we rebuilt bodies for timeline filtering
 let lastBodiesRebuildJD = 0;
 const BODIES_REBUILD_INTERVAL = 1; // Rebuild every ~1 Julian day
@@ -344,21 +385,16 @@ function animate(): void {
     lastBodiesRebuildJD = time.currentJulian;
   }
 
-  // Update hover target for zoom centering and visual feedback
-  const hoverResult = getHoveredBody(time.currentJulian);
-  if (hoverResult) {
-    // Only set hover target for zoom centering if directly hovering over the body (not orbit)
-    if (hoverResult.isDirectHit) {
-      const pos = getBodyPosition(hoverResult.body, time.currentJulian);
-      camera.setHoverTarget({ x: pos.x, y: pos.y });
-    } else {
-      camera.setHoverTarget(null);
-    }
-    // Always show visual hover feedback for both body and orbit
-    renderer.setHoveredBody(hoverResult.body.name);
-  } else {
-    camera.setHoverTarget(null);
-    renderer.setHoveredBody(null);
+  // Hit testing is expensive, so run it immediately after pointer/camera input
+  // and periodically while the pointer rests over moving bodies.
+  const now = performance.now();
+  if (
+    isPointerOverCanvas
+    && (hoverNeedsUpdate || now - lastHoverUpdateMs >= HOVER_REFRESH_INTERVAL_MS)
+  ) {
+    updateHoverState(time.currentJulian);
+    hoverNeedsUpdate = false;
+    lastHoverUpdateMs = now;
   }
 
   // Render everything (asteroids first, then orbits, then bodies)
