@@ -30,8 +30,8 @@ function solveKepler(M: number, e: number, tolerance: number = 1e-6): number {
   return E;
 }
 
-// Calculate asteroid position (returns km from Sun)
-function calculateAsteroidPosition(ast: AsteroidData, julianDate: number): Position {
+// Update an asteroid position in place (km from Sun).
+function updateAsteroidPosition(ast: AsteroidData, julianDate: number, position: Position): void {
   const daysSinceJ2000 = julianDate - J2000;
 
   // Mean anomaly at current time
@@ -51,15 +51,16 @@ function calculateAsteroidPosition(ast: AsteroidData, julianDate: number): Posit
   const cosAngle = Math.cos(angle);
   const sinAngle = Math.sin(angle);
 
-  return {
-    x: (x_orb * cosAngle - y_orb * sinAngle) * AU_KM,
-    y: (x_orb * sinAngle + y_orb * cosAngle) * AU_KM,
-  };
+  position.x = (x_orb * cosAngle - y_orb * sinAngle) * AU_KM;
+  position.y = (x_orb * sinAngle + y_orb * cosAngle) * AU_KM;
 }
 
 // Main asteroid belt class
 export class AsteroidBelt {
   private asteroids: AsteroidData[] = [];
+  private cachedPositions: Position[];
+  private cachedJulianDate = Number.NaN;
+  private maxLinearSpeedAUPerDay: number;
 
   // Belt boundaries (AU)
   private readonly INNER_BELT = 2.1;
@@ -69,12 +70,20 @@ export class AsteroidBelt {
 
   // Level-of-detail thresholds
   private readonly RING_VIEW_AU = 20;
+  private readonly MAX_POSITION_DRIFT_PX = 0.25;
 
   // Color for rendering
   readonly color = '#888888';
 
   constructor(asteroids: AsteroidData[]) {
     this.asteroids = asteroids;
+    this.cachedPositions = asteroids.map(() => ({ x: 0, y: 0 }));
+    this.maxLinearSpeedAUPerDay = asteroids.reduce((maxSpeed, asteroid) => {
+      // Perihelion is the maximum orbital speed for an elliptical orbit.
+      const speed = deg2rad(asteroid.n) * asteroid.a
+        * Math.sqrt((1 + asteroid.e) / (1 - asteroid.e));
+      return Math.max(maxSpeed, speed);
+    }, 0);
   }
 
   // Get count of asteroids
@@ -95,20 +104,31 @@ export class AsteroidBelt {
     // At solar-system scale the statistical ring is both clearer and cheaper.
     if (visibleRangeAU > this.RING_VIEW_AU) return [];
 
-    // Once individual dots are discernible, preserve the full catalog.
-    return this.getAsteroidPositions(julianDate);
-  }
-
-  // Get positions for the full asteroid catalog.
-  private getAsteroidPositions(julianDate: number): Position[] {
-    const count = this.asteroids.length;
-    const positions = new Array<Position>(count);
-
-    for (let i = 0; i < count; i++) {
-      positions[i] = calculateAsteroidPosition(this.asteroids[i], julianDate);
+    // Once individual dots are discernible, preserve the full catalog. Reuse
+    // positions until even the fastest asteroid could have moved 0.25px.
+    const maxCacheAgeDays = this.getMaxCacheAgeDays(camera);
+    if (
+      !Number.isFinite(this.cachedJulianDate)
+      || Math.abs(julianDate - this.cachedJulianDate) >= maxCacheAgeDays
+    ) {
+      this.updateAsteroidPositions(julianDate);
     }
 
-    return positions;
+    return this.cachedPositions;
+  }
+
+  private updateAsteroidPositions(julianDate: number): void {
+    for (let i = 0; i < this.asteroids.length; i++) {
+      updateAsteroidPosition(this.asteroids[i], julianDate, this.cachedPositions[i]);
+    }
+    this.cachedJulianDate = julianDate;
+  }
+
+  private getMaxCacheAgeDays(camera: Camera): number {
+    const maxSpeedPxPerDay = this.maxLinearSpeedAUPerDay * AU_KM * camera.zoom;
+    return maxSpeedPxPerDay > 0
+      ? this.MAX_POSITION_DRIFT_PX / maxSpeedPxPerDay
+      : Number.POSITIVE_INFINITY;
   }
 
   // Should render the statistical belt ring?
