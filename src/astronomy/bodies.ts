@@ -91,10 +91,14 @@ function getElementsForDate(body: CelestialBody, julianDate: number): OrbitalEle
 
 // Body lookup map for hierarchical position resolution
 let globalBodyMap: Map<string, CelestialBody> = new Map();
+let positionCacheJulianDate = Number.NaN;
+const positionCache = new Map<CelestialBody, { x: number; y: number }>();
 
 // Set the global body map (called by renderer before position calculations)
 export function setBodyMap(bodies: CelestialBody[]): void {
   globalBodyMap = new Map(bodies.map(b => [b.name, b]));
+  positionCache.clear();
+  positionCacheJulianDate = Number.NaN;
 }
 
 // Calculate position of a body at a given Julian date
@@ -102,7 +106,16 @@ export function getBodyPosition(
   body: CelestialBody,
   julianDate: number
 ): { x: number; y: number } {
+  if (positionCacheJulianDate !== julianDate) {
+    positionCache.clear();
+    positionCacheJulianDate = julianDate;
+  }
+
+  const cached = positionCache.get(body);
+  if (cached) return cached;
+
   if (body.fixedPosition) {
+    positionCache.set(body, body.fixedPosition);
     return body.fixedPosition;
   }
 
@@ -112,20 +125,26 @@ export function getBodyPosition(
     if (parent) {
       const parentPos = getBodyPosition(parent, julianDate);
       const relativePos = calculateParentCentricPosition(body.parentCentricElements, julianDate);
-      return {
+      const position = {
         x: parentPos.x + relativePos.x,
         y: parentPos.y + relativePos.y,
       };
+      positionCache.set(body, position);
+      return position;
     }
   }
 
   // Heliocentric bodies (planets, comets, asteroids)
   const elements = getElementsForDate(body, julianDate);
   if (!elements) {
-    return { x: 0, y: 0 };
+    const position = { x: 0, y: 0 };
+    positionCache.set(body, position);
+    return position;
   }
 
-  return calculatePosition(elements, julianDate);
+  const position = calculatePosition(elements, julianDate);
+  positionCache.set(body, position);
+  return position;
 }
 
 // Calculate orbit path for rendering
