@@ -68,8 +68,9 @@ export class AsteroidBelt {
   private readonly MIN_ORBIT_RADIUS = 1.5;
   private readonly MAX_ORBIT_RADIUS = 4.5;
 
-  // Level-of-detail thresholds
-  private readonly RING_VIEW_AU = 20;
+  // Use the statistical ring only once the entire belt is too small for
+  // individual dots to remain visually meaningful.
+  private readonly MIN_INDIVIDUAL_BELT_RADIUS_PX = 24;
   private readonly MAX_POSITION_DRIFT_PX = 0.25;
 
   // Color for rendering
@@ -99,10 +100,8 @@ export class AsteroidBelt {
     // Avoid propagating any asteroid orbits when the belt is outside the viewport.
     if (!this.isBeltInViewport(camera)) return [];
 
-    const visibleRangeAU = camera.getVisibleRangeAU();
-
-    // At solar-system scale the statistical ring is both clearer and cheaper.
-    if (visibleRangeAU > this.RING_VIEW_AU) return [];
+    // At genuinely unresolvable scales the statistical ring is clearer and cheaper.
+    if (this.shouldUseStatisticalRing(camera)) return [];
 
     // Once individual dots are discernible, preserve the full catalog. Reuse
     // positions until even the fastest asteroid could have moved 0.25px.
@@ -133,7 +132,12 @@ export class AsteroidBelt {
 
   // Should render the statistical belt ring?
   shouldRenderBeltRing(camera: Camera): boolean {
-    return camera.getVisibleRangeAU() > this.RING_VIEW_AU && this.isBeltInViewport(camera);
+    return this.shouldUseStatisticalRing(camera) && this.isBeltInViewport(camera);
+  }
+
+  private shouldUseStatisticalRing(camera: Camera): boolean {
+    const projectedOuterRadiusPx = camera.kmToPixels(this.OUTER_BELT * AU_KM);
+    return projectedOuterRadiusPx < this.MIN_INDIVIDUAL_BELT_RADIUS_PX;
   }
 
   // Fast annulus/viewport intersection test used before any orbital propagation.
