@@ -17,12 +17,14 @@ body {
   font-family: 'Space Mono', monospace;
   overflow: hidden;
   color: var(--text);
+  -webkit-text-size-adjust: 100%;
 }
 
 #canvas {
   display: block;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   cursor: grab;
   touch-action: none;
 }
@@ -247,4 +249,49 @@ body {
 
 .sidebar-wikipedia-link:hover {
   opacity: 0.7;
+}
+
+@media (max-width: 600px) {
+  #ui {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: calc(100vw - 16px);
+    gap: 8px;
+  }
+
+  #date-display {
+    font-size: 13px;
+  }
+
+  #speed-selector {
+    width: 100%;
+    justify-content: center;
+    gap: 0;
+    padding: 3px;
+  }
+
+  .speed-option {
+    flex: 0 1 auto;
+    font-size: 11px;
+    padding: 7px;
+  }
+
+  #moon-selector {
+    max-width: 100%;
+    gap: 1px;
+    padding: 3px 5px;
+  }
+
+  #moon-selector span {
+    font-size: 9px;
+    margin-right: 2px;
+  }
+
+  .moon-option {
+    font-size: 11px;
+    padding: 6px 7px;
+  }
+
+  #speed-indicator {
+    font-size: 9px;
+  }
 }

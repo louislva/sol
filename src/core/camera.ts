@@ -13,6 +13,9 @@ export class Camera {
   // Canvas dimensions
   width: number = 0;
   height: number = 0;
+  pixelRatio: number = 1;
+
+  private resizeObserver?: ResizeObserver;
 
   // Zoom limits
   private minZoom = 1e-12;  // See past Neptune
@@ -29,6 +32,15 @@ export class Camera {
   constructor(canvas: HTMLCanvasElement) {
     this.resize(canvas);
     this.setupControls(canvas);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.resize(canvas));
+      this.resizeObserver.observe(canvas);
+    }
+
+    // Mobile browser chrome changes the visual viewport without consistently
+    // emitting a window resize event.
+    window.visualViewport?.addEventListener('resize', () => this.resize(canvas));
   }
 
   get zoom(): number {
@@ -40,11 +52,19 @@ export class Camera {
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
 
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const backingWidth = Math.max(1, Math.round(rect.width * dpr));
+    const backingHeight = Math.max(1, Math.round(rect.height * dpr));
+
+    if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+      canvas.width = backingWidth;
+      canvas.height = backingHeight;
+    }
 
     this.width = rect.width;
     this.height = rect.height;
+    this.pixelRatio = dpr;
   }
 
   // Convert world coordinates (km) to screen coordinates (pixels)

@@ -155,11 +155,19 @@ export class Renderer {
   }
 
   clear(): void {
-    const dpr = window.devicePixelRatio || 1;
+    // Always clear the complete backing store in device pixels. On mobile,
+    // viewport and pixel-ratio changes can otherwise leave uncleared trails.
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.scale(dpr, dpr);
     this.ctx.fillStyle = this.bgColor;
-    this.ctx.fillRect(0, 0, this.camera.width, this.camera.height);
+    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    this.ctx.setTransform(
+      this.camera.pixelRatio,
+      0,
+      0,
+      this.camera.pixelRatio,
+      0,
+      0
+    );
   }
 
   renderBody(body: CelestialBody, julianDate: number): void {
@@ -847,11 +855,14 @@ export class Renderer {
 
     if (bestBarPx === 0) return; // Nothing fits
 
-    // Position: bottom right with padding
-    const padding = 24;
+    // Position: bottom right. On narrow screens the controls span the full
+    // width, so lift the scale bar above the mobile control stack.
+    const isNarrowScreen = this.camera.width <= 600;
+    const horizontalPadding = isNarrowScreen ? 16 : 24;
+    const bottomPadding = isNarrowScreen ? 160 : 24;
     const tickHeight = 6;
-    const barY = this.camera.height - padding;
-    const barX = this.camera.width - padding - bestBarPx;
+    const barY = this.camera.height - bottomPadding;
+    const barX = this.camera.width - horizontalPadding - bestBarPx;
 
     this.ctx.save();
 
