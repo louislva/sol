@@ -28,6 +28,7 @@ export class Renderer {
 
   // Body lookup map for parent occlusion checks
   private bodyMap: Map<string, CelestialBody> = new Map();
+  private indexedBodies: CelestialBody[] | null = null;
 
   // Currently hovered body name
   private hoveredBodyName: string | null = null;
@@ -858,14 +859,15 @@ export class Renderer {
   renderAll(bodies: CelestialBody[], julianDate: number, asteroidBelt?: AsteroidBelt): void {
     this.clear();
 
-    // Build body map for parent lookup in occlusion checks
-    this.bodyMap.clear();
-    for (const body of bodies) {
-      this.bodyMap.set(body.name, body);
+    // Body membership changes only when filters or timeline data change.
+    if (this.indexedBodies !== bodies) {
+      this.bodyMap.clear();
+      for (const body of bodies) {
+        this.bodyMap.set(body.name, body);
+      }
+      setBodyMap(bodies);
+      this.indexedBodies = bodies;
     }
-
-    // Set global body map for hierarchical position calculations
-    setBodyMap(bodies);
 
     // Draw asteroids first (behind everything)
     if (asteroidBelt) {
