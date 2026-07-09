@@ -24,7 +24,8 @@ export class Renderer {
 
   // Orbit path cache - recalculate only occasionally
   private orbitCache: Map<string, OrbitCache> = new Map();
-  private readonly CACHE_DURATION = 1; // Recalculate every ~1 Julian day
+  private readonly SEGMENTED_ORBIT_CACHE_DAYS = 1;
+  private readonly SECULAR_ORBIT_CACHE_DAYS = 365.25;
 
   // Body lookup map for parent occlusion checks
   private bodyMap: Map<string, CelestialBody> = new Map();
@@ -324,11 +325,12 @@ export class Renderer {
     const eccentricity = body.elements?.e ?? body.parentCentricElements?.e ?? 0;
     const numPoints = this.getOrbitResolution(eccentricity);
     const cached = this.orbitCache.get(body.name);
+    const cacheDuration = this.getOrbitCacheDuration(body);
 
     // Use cache if fresh enough and resolution matches
     if (
       cached &&
-      Math.abs(cached.julianDate - julianDate) < this.CACHE_DURATION &&
+      Math.abs(cached.julianDate - julianDate) < cacheDuration &&
       cached.numPoints === numPoints
     ) {
       return cached.points;
@@ -338,6 +340,30 @@ export class Renderer {
     const points = getOrbitPath(body, julianDate, numPoints);
     this.orbitCache.set(body.name, { points, julianDate, numPoints });
     return points;
+  }
+
+  private getOrbitCacheDuration(body: CelestialBody): number {
+    // Segmented trajectories can change shape at a mission boundary.
+    if (body.segments) return this.SEGMENTED_ORBIT_CACHE_DAYS;
+
+    // Parent-centric paths and fixed-element heliocentric paths do not change
+    // with time; only the body's position along them changes.
+    if (body.parentCentricElements) return Number.POSITIVE_INFINITY;
+
+    const elements = body.elements;
+    if (!elements) return Number.POSITIVE_INFINITY;
+
+    const hasSecularGeometryChanges = Boolean(
+      elements.aDot
+      || elements.eDot
+      || elements.iDot
+      || elements.longPeriDot
+      || elements.longNodeDot
+    );
+
+    return hasSecularGeometryChanges
+      ? this.SECULAR_ORBIT_CACHE_DAYS
+      : Number.POSITIVE_INFINITY;
   }
 
   renderOrbit(body: CelestialBody, julianDate: number): void {
