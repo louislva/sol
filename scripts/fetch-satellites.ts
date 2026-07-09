@@ -1,310 +1,347 @@
 /**
- * Satellite Data Fetch Script
+ * Build the satellite catalog used by the Earth view.
  *
- * Downloads TLE data from CelesTrak and converts to our format.
+ * Every active satellite that is not part of a large constellation is kept as
+ * an individual object. Constellations are collapsed into orbital shell bands
+ * derived from the current positions of their active members.
  *
- * Usage:
- *   npx ts-node scripts/fetch-satellites.ts
+ * Source: CelesTrak GP data in OMM JSON format.
+ * Output: public/data/satellites.json
  *
- * Output:
- *   src/data/satellites.json
- *
- * Data sources:
- *   https://celestrak.org/NORAD/elements/
+ * Run with Node 22.18+ (which supports erasable TypeScript syntax):
+ *   node scripts/fetch-satellites.ts
  */
 
-import * as fs from 'fs';
-import * as https from 'https';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const OUTPUT_PATH = path.join(__dirname, "../public/data/satellites.json");
+const CELESTRAK_GP_URL = "https://celestrak.org/NORAD/elements/gp.php";
+
+const EARTH_MU = 398600.4418; // km^3/s^2
+const EARTH_RADIUS = 6378.137; // km
+const MILLIS_PER_DAY = 86_400_000;
+const UNIX_EPOCH_JULIAN_DATE = 2440587.5;
+const SHELL_SPLIT_GAP_KM = 150;
+const MINIMUM_BAND_THICKNESS_KM = 50;
+const REQUEST_DELAY_MS = 600;
+
+type SatelliteCategory = "LEO" | "MEO" | "GEO" | "OTHER";
+
+interface OmmRecord {
+  OBJECT_NAME?: string;
+  NORAD_CAT_ID?: string | number;
+  EPOCH?: string;
+  MEAN_MOTION?: string | number;
+  ECCENTRICITY?: string | number;
+  INCLINATION?: string | number;
+  RA_OF_ASC_NODE?: string | number;
+  ARG_OF_PERICENTER?: string | number;
+  MEAN_ANOMALY?: string | number;
+}
 
 interface SatelliteData {
+  noradId: number;
   name: string;
-  a: number;           // Semi-major axis (km)
-  e: number;           // Eccentricity
-  i: number;           // Inclination (degrees)
-  Omega: number;       // RAAN (degrees)
-  omega: number;       // Argument of perigee (degrees)
-  M0: number;          // Mean anomaly at epoch (degrees)
-  n: number;           // Mean motion (degrees/day)
-  epoch: number;       // Julian date of epoch
-  category: string;    // LEO, GEO, MEO, etc.
+  a: number;
+  e: number;
+  i: number;
+  Omega: number;
+  omega: number;
+  M0: number;
+  n: number;
+  epoch: number;
+  category: SatelliteCategory;
 }
 
-// Earth constants
-const EARTH_MU = 398600.4418;  // km^3/s^2
-const EARTH_RADIUS = 6378.137;  // km
-
-// TLE URLs from CelesTrak
-const TLE_SOURCES = {
-  stations: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle',
-  geostationary: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=geo&FORMAT=tle',
-  // Note: Starlink is very large, we'll sample it
-  starlink: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
-  gps: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle',
-  galileo: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=galileo&FORMAT=tle',
-};
-
-// Parse TLE epoch
-function parseTLEEpoch(epochStr: string): number {
-  const year2digit = parseInt(epochStr.substring(0, 2), 10);
-  const year = year2digit < 57 ? 2000 + year2digit : 1900 + year2digit;
-  const dayOfYear = parseFloat(epochStr.substring(2));
-
-  const a = Math.floor((14 - 1) / 12);
-  const y = year + 4800 - a;
-  const m = 1 + 12 * a - 3;
-  const jd0 = 1 + Math.floor((153 * m + 2) / 5) + 365 * y +
-              Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-
-  return jd0 + dayOfYear - 1;
+interface ConstellationSource {
+  name: string;
+  group: string;
+  color: string;
 }
 
-// Parse a single TLE set
-function parseTLE(name: string, line1: string, line2: string): SatelliteData | null {
-  try {
-    // Line 1 parsing
-    const epochStr = line1.substring(18, 32).trim();
-    const epoch = parseTLEEpoch(epochStr);
+interface ConstellationDefinition extends ConstellationSource {
+  namePatterns: RegExp[];
+}
 
-    // Line 2 parsing
-    const i = parseFloat(line2.substring(8, 16).trim());
-    const Omega = parseFloat(line2.substring(17, 25).trim());
-    const e = parseFloat('0.' + line2.substring(26, 33).trim());
-    const omega = parseFloat(line2.substring(34, 42).trim());
-    const M0 = parseFloat(line2.substring(43, 51).trim());
-    const nRevPerDay = parseFloat(line2.substring(52, 63).trim());
+interface ConstellationBand {
+  innerRadiusKm: number;
+  outerRadiusKm: number;
+  meanRadiusKm: number;
+  count: number;
+}
 
-    // Convert and calculate
-    const n = nRevPerDay * 360;  // degrees per day
-    const nRadPerSec = (nRevPerDay * 2 * Math.PI) / 86400;
-    const a = Math.pow(EARTH_MU / (nRadPerSec * nRadPerSec), 1/3);
+interface ConstellationData extends ConstellationSource {
+  count: number;
+  bands: ConstellationBand[];
+}
 
-    // Determine category
-    const altitude = a - EARTH_RADIUS;
-    let category: string;
-    if (altitude < 2000) {
-      category = 'LEO';
-    } else if (altitude > 35000 && altitude < 37000) {
-      category = 'GEO';
-    } else if (altitude >= 2000 && altitude < 35000) {
-      category = 'MEO';
-    } else {
-      category = 'OTHER';
+interface SatelliteCatalog {
+  generatedAt: string;
+  source: string;
+  activeSatelliteCount: number;
+  individualSatelliteCount: number;
+  satellites: SatelliteData[];
+  constellations: ConstellationData[];
+}
+
+// These groups are visually more truthful as population bands than as ten
+// thousand overlapping points. Navigation systems count as constellations too.
+const CONSTELLATION_SOURCES: ConstellationDefinition[] = [
+  { name: "Starlink", group: "starlink", color: "#72a7ff", namePatterns: [/^STARLINK-/i] },
+  { name: "OneWeb", group: "oneweb", color: "#83d6ff", namePatterns: [/^ONEWEB-/i] },
+  { name: "Qianfan", group: "qianfan", color: "#ff9f72", namePatterns: [/^QIANFAN-/i] },
+  { name: "Hulianwang", group: "hulianwang", color: "#ffcf6e", namePatterns: [/^HULIANWANG/i] },
+  { name: "Kuiper", group: "kuiper", color: "#ca8cff", namePatterns: [/^KUIPER/i] },
+  { name: "Iridium NEXT", group: "iridium-NEXT", color: "#62e6c5", namePatterns: [/^IRIDIUM /i] },
+  { name: "Orbcomm", group: "orbcomm", color: "#64c98a", namePatterns: [/^ORBCOMM/i] },
+  { name: "Globalstar", group: "globalstar", color: "#8edc65", namePatterns: [/^GLOBALSTAR/i] },
+  {
+    name: "Planet",
+    group: "planet",
+    color: "#ff7fa6",
+    namePatterns: [/^FLOCK /i, /^SKYSAT-/i, /^PELICAN-/i, /^TANAGER-/i, /^DOVE/i],
+  },
+  { name: "Spire", group: "spire", color: "#e698ff", namePatterns: [/^LEMUR-/i] },
+  { name: "GPS", group: "gps-ops", color: "#7272ff", namePatterns: [/^NAVSTAR /i] },
+  { name: "GLONASS", group: "glo-ops", color: "#ff6f6f", namePatterns: [/\[GLONASS-[^\]]+\]/i] },
+  { name: "Galileo", group: "galileo", color: "#65c7ff", namePatterns: [/^GSAT\d/i] },
+  { name: "BeiDou", group: "beidou", color: "#ffd166", namePatterns: [/^BEIDOU-/i] },
+];
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchGroup(group: string): Promise<OmmRecord[]> {
+  const url = new URL(CELESTRAK_GP_URL);
+  url.searchParams.set("GROUP", group);
+  url.searchParams.set("FORMAT", "json");
+
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "sol-satellite-catalog/1.0",
+      },
+    });
+
+    if (response.ok) {
+      const payload: unknown = await response.json();
+      if (!Array.isArray(payload)) {
+        throw new Error(`CelesTrak returned non-array JSON for ${group}`);
+      }
+      return payload as OmmRecord[];
     }
 
-    return { name: name.trim(), a, e, i, Omega, omega, M0, n, epoch, category };
-  } catch {
+    const retryable = response.status === 403
+      || response.status === 429
+      || response.status >= 500;
+    if (!retryable || attempt === 5) {
+      throw new Error(`CelesTrak ${group} request failed: HTTP ${response.status}`);
+    }
+
+    const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfter = retryAfterHeader === null ? Number.NaN : Number(retryAfterHeader);
+    const waitMilliseconds = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : attempt * 5000;
+    console.warn(`  HTTP ${response.status}; retrying ${group} in ${waitMilliseconds / 1000}s`);
+    await sleep(waitMilliseconds);
+  }
+
+  throw new Error(`CelesTrak ${group} request exhausted its retries`);
+}
+
+function finiteNumber(value: string | number | undefined): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseOmmRecord(record: OmmRecord): SatelliteData | null {
+  const noradId = finiteNumber(record.NORAD_CAT_ID);
+  const meanMotionRevolutionsPerDay = finiteNumber(record.MEAN_MOTION);
+  const e = finiteNumber(record.ECCENTRICITY);
+  const i = finiteNumber(record.INCLINATION);
+  const Omega = finiteNumber(record.RA_OF_ASC_NODE);
+  const omega = finiteNumber(record.ARG_OF_PERICENTER);
+  const M0 = finiteNumber(record.MEAN_ANOMALY);
+  const epochDate = record.EPOCH ? new Date(record.EPOCH) : null;
+  const name = record.OBJECT_NAME?.trim();
+
+  if (
+    noradId === null
+    || meanMotionRevolutionsPerDay === null
+    || meanMotionRevolutionsPerDay <= 0
+    || e === null
+    || e < 0
+    || e >= 1
+    || i === null
+    || Omega === null
+    || omega === null
+    || M0 === null
+    || !epochDate
+    || !Number.isFinite(epochDate.getTime())
+    || !name
+  ) {
     return null;
   }
+
+  const meanMotionRadiansPerSecond = meanMotionRevolutionsPerDay * Math.PI * 2 / 86400;
+  const a = Math.cbrt(EARTH_MU / meanMotionRadiansPerSecond ** 2);
+  const altitude = a - EARTH_RADIUS;
+
+  let category: SatelliteCategory;
+  if (altitude < 2000) category = "LEO";
+  else if (altitude >= 35_000 && altitude < 37_000) category = "GEO";
+  else if (altitude < 35_000) category = "MEO";
+  else category = "OTHER";
+
+  return {
+    noradId,
+    name,
+    a,
+    e,
+    i,
+    Omega,
+    omega,
+    M0,
+    n: meanMotionRevolutionsPerDay * 360,
+    epoch: epochDate.getTime() / MILLIS_PER_DAY + UNIX_EPOCH_JULIAN_DATE,
+    category,
+  };
 }
 
-// Parse TLE text into satellite data
-function parseTLEText(text: string): SatelliteData[] {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+function parseGroup(records: OmmRecord[], group: string): SatelliteData[] {
   const satellites: SatelliteData[] = [];
+  const rejectedNames: string[] = [];
 
-  for (let i = 0; i < lines.length - 2; i += 3) {
-    const name = lines[i];
-    const line1 = lines[i + 1];
-    const line2 = lines[i + 2];
+  for (const record of records) {
+    const satellite = parseOmmRecord(record);
+    if (satellite) satellites.push(satellite);
+    else rejectedNames.push(record.OBJECT_NAME ?? "unknown object");
+  }
 
-    if (line1 && line1.startsWith('1 ') && line2 && line2.startsWith('2 ')) {
-      const sat = parseTLE(name, line1, line2);
-      if (sat) satellites.push(sat);
-    }
+  if (rejectedNames.length > 0) {
+    const sample = rejectedNames.slice(0, 5).join(", ");
+    console.warn(`  Rejected ${rejectedNames.length} malformed ${group} records (${sample})`);
   }
 
   return satellites;
 }
 
-// Download file
-function downloadFile(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    console.log(`Downloading ${url}...`);
+function deduplicateByNoradId(satellites: SatelliteData[]): SatelliteData[] {
+  const byNoradId = new Map<number, SatelliteData>();
+  for (const satellite of satellites) {
+    byNoradId.set(satellite.noradId, satellite);
+  }
+  return [...byNoradId.values()];
+}
 
-    https.get(url, (response) => {
-      if (response.statusCode === 301 || response.statusCode === 302) {
-        const redirectUrl = response.headers.location;
-        if (redirectUrl) {
-          downloadFile(redirectUrl).then(resolve).catch(reject);
-          return;
-        }
-      }
+function buildBands(satellites: SatelliteData[]): ConstellationBand[] {
+  if (satellites.length === 0) return [];
 
-      if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download: ${response.statusCode}`));
-        return;
-      }
+  const sorted = [...satellites].sort((left, right) => left.a - right.a);
+  const shells: SatelliteData[][] = [[sorted[0]]];
 
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => resolve(data));
-      response.on('error', reject);
-    }).on('error', reject);
+  for (let index = 1; index < sorted.length; index++) {
+    const satellite = sorted[index];
+    const previous = sorted[index - 1];
+    if (satellite.a - previous.a > SHELL_SPLIT_GAP_KM) {
+      shells.push([]);
+    }
+    shells[shells.length - 1].push(satellite);
+  }
+
+  return shells.map((shell) => {
+    const meanRadiusKm = shell.reduce((sum, satellite) => sum + satellite.a, 0) / shell.length;
+    let innerRadiusKm = Math.min(...shell.map((satellite) => satellite.a * (1 - satellite.e)));
+    let outerRadiusKm = Math.max(...shell.map((satellite) => satellite.a * (1 + satellite.e)));
+
+    if (outerRadiusKm - innerRadiusKm < MINIMUM_BAND_THICKNESS_KM) {
+      innerRadiusKm = meanRadiusKm - MINIMUM_BAND_THICKNESS_KM / 2;
+      outerRadiusKm = meanRadiusKm + MINIMUM_BAND_THICKNESS_KM / 2;
+    }
+
+    return {
+      innerRadiusKm,
+      outerRadiusKm,
+      meanRadiusKm,
+      count: shell.length,
+    };
   });
 }
 
-// Generate sample satellite data (for offline use)
-function generateSampleData(): SatelliteData[] {
-  console.log('Generating sample satellite data...');
+async function main(): Promise<void> {
+  console.log("Fetching the active satellite catalog from CelesTrak...");
+  const localActivePath = process.env.ACTIVE_CATALOG_PATH;
+  const namesOnly = process.env.CONSTELLATION_NAMES_ONLY === "1";
+  const activeRecords = localActivePath
+    ? JSON.parse(fs.readFileSync(localActivePath, "utf8")) as OmmRecord[]
+    : await fetchGroup("active");
+  const activeSatellites = deduplicateByNoradId(parseGroup(activeRecords, "active"));
+  const activeByNoradId = new Map(activeSatellites.map((satellite) => [satellite.noradId, satellite]));
+  const constellationIds = new Set<number>();
+  const constellations: ConstellationData[] = [];
 
-  // Sample well-known satellites
-  const satellites: SatelliteData[] = [
-    // ISS
-    {
-      name: 'ISS (ZARYA)',
-      a: 6797.0,
-      e: 0.0001,
-      i: 51.6,
-      Omega: 120.0,
-      omega: 0.0,
-      M0: 0.0,
-      n: 5693.0,  // ~93 min orbit
-      epoch: 2460000,
-      category: 'LEO',
-    },
-    // Hubble
-    {
-      name: 'HST (Hubble)',
-      a: 6914.0,
-      e: 0.0003,
-      i: 28.5,
-      Omega: 200.0,
-      omega: 90.0,
-      M0: 180.0,
-      n: 5544.0,  // ~96 min orbit
-      epoch: 2460000,
-      category: 'LEO',
-    },
-    // Tiangong
-    {
-      name: 'TIANGONG',
-      a: 6770.0,
-      e: 0.0001,
-      i: 41.5,
-      Omega: 300.0,
-      omega: 45.0,
-      M0: 90.0,
-      n: 5728.0,
-      epoch: 2460000,
-      category: 'LEO',
-    },
-  ];
+  console.log(`  ${activeSatellites.length.toLocaleString()} active satellites`);
 
-  // Add sample GEO satellites
-  for (let i = 0; i < 36; i++) {
-    satellites.push({
-      name: `GEO-${i + 1}`,
-      a: 42164.0,  // GEO altitude
-      e: 0.0001,
-      i: 0.1,
-      Omega: i * 10,  // Spread around the equator
-      omega: 0,
-      M0: Math.random() * 360,
-      n: 360.985,  // ~24 hour orbit
-      epoch: 2460000,
-      category: 'GEO',
-    });
-  }
+  for (const definition of CONSTELLATION_SOURCES) {
+    const { namePatterns, ...source } = definition;
+    console.log(`Fetching ${source.name}...`);
+    let groupSatellites = namesOnly
+      ? []
+      : deduplicateByNoradId(parseGroup(
+        await (sleep(REQUEST_DELAY_MS).then(() => fetchGroup(source.group))),
+        source.group
+      ))
+      .map((satellite) => activeByNoradId.get(satellite.noradId))
+      .filter((satellite): satellite is SatelliteData => satellite !== undefined);
 
-  // Add sample LEO satellites (like Starlink distribution)
-  for (let shell = 0; shell < 3; shell++) {
-    const altitude = 340 + shell * 100;  // 340, 440, 540 km
-    const a = EARTH_RADIUS + altitude;
-    const nRadPerSec = Math.sqrt(EARTH_MU / Math.pow(a, 3));
-    const n = (nRadPerSec * 86400 / (2 * Math.PI)) * 360;
+    // Group feeds can briefly lag newly launched members. Standardized names
+    // close that gap while the group intersection prevents broad false matches.
+    const nameMatches = activeSatellites.filter((satellite) => (
+      namePatterns.some((pattern) => pattern.test(satellite.name))
+    ));
+    groupSatellites = deduplicateByNoradId([...groupSatellites, ...nameMatches])
+      .filter((satellite) => !constellationIds.has(satellite.noradId));
 
-    for (let plane = 0; plane < 6; plane++) {
-      const inclination = 53 + shell * 10;
-      const Omega = plane * 60;
-
-      for (let sat = 0; sat < 10; sat++) {
-        satellites.push({
-          name: `LEO-${shell}-${plane}-${sat}`,
-          a,
-          e: 0.0001,
-          i: inclination,
-          Omega,
-          omega: 0,
-          M0: sat * 36,  // Spread in plane
-          n,
-          epoch: 2460000,
-          category: 'LEO',
-        });
-      }
+    for (const satellite of groupSatellites) {
+      constellationIds.add(satellite.noradId);
     }
+
+    const bands = buildBands(groupSatellites);
+    constellations.push({ ...source, count: groupSatellites.length, bands });
+    console.log(`  ${groupSatellites.length.toLocaleString()} active members → ${bands.length} band${bands.length === 1 ? "" : "s"}`);
   }
 
-  return satellites;
+  const satellites = activeSatellites
+    .filter((satellite) => !constellationIds.has(satellite.noradId))
+    .sort((left, right) => left.noradId - right.noradId);
+
+  const catalog: SatelliteCatalog = {
+    generatedAt: new Date().toISOString(),
+    source: "https://celestrak.org/NORAD/elements/",
+    activeSatelliteCount: activeSatellites.length,
+    individualSatelliteCount: satellites.length,
+    satellites,
+    constellations,
+  };
+
+  fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
+  const temporaryPath = `${OUTPUT_PATH}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify(catalog));
+  fs.renameSync(temporaryPath, OUTPUT_PATH);
+
+  console.log(`\nWrote ${satellites.length.toLocaleString()} individual satellites and ${constellations.length} constellation groups`);
+  console.log(`Output: ${OUTPUT_PATH}`);
 }
 
-// Main function
-async function main() {
-  const outputPath = path.join(__dirname, '../src/data/satellites.json');
-  let satellites: SatelliteData[] = [];
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
-  try {
-    // Try to download from CelesTrak
-    console.log('Attempting to fetch satellite data from CelesTrak...');
-    console.log('Note: This may fail due to rate limiting or network issues.');
-    console.log('In that case, sample data will be generated.\n');
-
-    // Fetch space stations (small, high priority)
-    try {
-      const stationsData = await downloadFile(TLE_SOURCES.stations);
-      satellites.push(...parseTLEText(stationsData));
-      console.log(`Fetched ${satellites.length} space stations`);
-    } catch (err) {
-      console.log('Could not fetch stations:', err);
-    }
-
-    // Fetch GPS satellites
-    try {
-      const gpsData = await downloadFile(TLE_SOURCES.gps);
-      const gpsSats = parseTLEText(gpsData);
-      satellites.push(...gpsSats);
-      console.log(`Fetched ${gpsSats.length} GPS satellites`);
-    } catch (err) {
-      console.log('Could not fetch GPS:', err);
-    }
-
-    // If we got nothing, use sample data
-    if (satellites.length === 0) {
-      console.log('\nNo satellites fetched, generating sample data...');
-      satellites = generateSampleData();
-    }
-  } catch (error) {
-    console.error('Error fetching data, using generated sample:', error);
-    satellites = generateSampleData();
-  }
-
-  // Ensure output directory exists
-  const outputDir = path.dirname(outputPath);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  // Write output
-  fs.writeFileSync(outputPath, JSON.stringify(satellites, null, 2));
-  console.log(`\nWrote ${satellites.length} satellites to ${outputPath}`);
-
-  // Summary
-  const categories = satellites.reduce((acc, s) => {
-    acc[s.category] = (acc[s.category] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  console.log('\nCategory breakdown:');
-  for (const [cat, count] of Object.entries(categories)) {
-    console.log(`  ${cat}: ${count}`);
-  }
-}
-
-main().catch(console.error);
-
-// Export for use as module
-export { SatelliteData, parseTLE, parseTLEText, generateSampleData };
+export { buildBands, parseOmmRecord };

@@ -7,7 +7,11 @@ import { filterMoons } from './data/moons';
 import { allProbes } from './data/probes';
 import { allComets } from './data/comets';
 import { loadSpacecraftData, getVisibleSpacecraft, hasSpacecraftData } from './data/spacecraft';
-import { allSatellites } from './data/satellites';
+import {
+  allSatellites,
+  getSatelliteConstellations,
+  loadSatelliteData,
+} from './data/satellites';
 import { AsteroidBelt, generateSampleAsteroids } from './astronomy/asteroidBelt';
 import { MIN_DISPLAY_SIZE, type MoonCategory } from './astronomy/constants';
 import * as sidebar from './ui/sidebar';
@@ -57,6 +61,12 @@ let bodies: CelestialBody[] = buildBodies();
 // Load spacecraft data asynchronously
 loadSpacecraftData().then(() => {
   // Rebuild bodies array with spacecraft data
+  bodies = buildBodies(time.currentJulian);
+});
+
+// Keep the much larger satellite catalog out of the JavaScript bundle and add
+// it as soon as the standalone data file arrives.
+loadSatelliteData().then(() => {
   bodies = buildBodies(time.currentJulian);
 });
 
@@ -286,6 +296,13 @@ function getHoveredBody(julianDate: number): HoverResult | null {
 
   // First pass: check direct body hits (higher priority)
   for (const body of bodies) {
+    if (
+      body.type === 'satellite'
+      && camera.kmToPixels(bodyMap.get('Earth')?.radius ?? 0) < 30
+    ) {
+      continue;
+    }
+
     // Skip bodies that are occluded by their parent
     if (isOccludedByParent(body, julianDate, bodyMap)) {
       continue;
@@ -406,7 +423,12 @@ function animate(): void {
   }
 
   // Render everything (asteroids first, then orbits, then bodies)
-  renderer.renderAll(bodies, time.currentJulian, asteroidBelt);
+  renderer.renderAll(
+    bodies,
+    time.currentJulian,
+    asteroidBelt,
+    getSatelliteConstellations()
+  );
 
   // Text does not need animation-frame cadence. Avoid layout work when the
   // formatted values have not changed.

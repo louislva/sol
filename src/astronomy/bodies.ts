@@ -48,6 +48,11 @@ export interface CelestialBody {
 
   // Display options
   hideOrbit?: boolean;               // Don't render orbit path
+  hideLabel?: boolean;               // Only label when hovered or selected
+
+  // Earth satellite metadata
+  noradId?: number;
+  satelliteCategory?: 'LEO' | 'MEO' | 'GEO' | 'OTHER';
 
   // Discovery information (for natural bodies)
   discovery?: {

@@ -10,6 +10,7 @@ import {
   type SpacecraftIconType,
 } from "../astronomy/constants";
 import { AsteroidBelt } from "../astronomy/asteroidBelt";
+import { type SatelliteConstellation } from "../data/satellites";
 
 // Cached orbit data
 interface OrbitCache {
@@ -46,6 +47,11 @@ export class Renderer {
 
   private readonly bgColor = "#000000";
   private readonly labelColor = "#cccccc";
+  private readonly SATELLITE_DETAIL_EARTH_RADIUS_PX = 30;
+  private readonly SATELLITE_MAX_SPEED_KM_PER_DAY = 700_000;
+  private readonly SATELLITE_POSITION_ERROR_PX = 0.5;
+  private satelliteRelativePositionCache = new Map<CelestialBody, { x: number; y: number }>();
+  private satellitePositionCacheJulianDate = Number.NaN;
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.ctx = canvas.getContext("2d")!;
@@ -290,7 +296,10 @@ export class Renderer {
     this.ctx.globalAlpha = 1;
 
     // Draw label if body is at minimum size (contextual visibility)
-    if (radiusPixels <= minSize * 1.5) {
+    if (
+      radiusPixels <= minSize * 1.5
+      && (!body.hideLabel || isHovered || isSelected)
+    ) {
       const labelOpacity = this.getLabelOcclusionOpacity(body, julianDate);
       this.renderLabel(
         body.name,
@@ -298,6 +307,150 @@ export class Renderer {
         screenPos.y + radiusPixels + 12,
         labelOpacity
       );
+    }
+  }
+
+  private shouldRenderSatelliteDetail(): boolean {
+    const earth = this.bodyMap.get("Earth");
+    return earth !== undefined
+      && this.camera.kmToPixels(earth.radius) >= this.SATELLITE_DETAIL_EARTH_RADIUS_PX;
+  }
+
+  private renderConstellationBands(
+    constellations: readonly SatelliteConstellation[],
+    julianDate: number
+  ): void {
+    if (constellations.length === 0 || !this.shouldRenderSatelliteDetail()) return;
+
+    const earth = this.bodyMap.get("Earth");
+    if (!earth) return;
+
+    const earthPosition = getBodyPosition(earth, julianDate);
+    const earthScreen = this.camera.worldToScreen(earthPosition.x, earthPosition.y);
+    const viewRadius = Math.hypot(this.camera.width, this.camera.height);
+
+    this.ctx.save();
+
+    for (const constellation of constellations) {
+      const opacity = Math.min(0.19, 0.055 + Math.log10(constellation.count + 1) * 0.035);
+      this.ctx.fillStyle = constellation.color;
+      this.ctx.globalAlpha = opacity;
+
+      for (const band of constellation.bands) {
+        const meanRadiusPixels = this.camera.kmToPixels(band.meanRadiusKm);
+        const physicalWidthPixels = this.camera.kmToPixels(
+          band.outerRadiusKm - band.innerRadiusKm
+        );
+        const widthPixels = Math.max(1.25, physicalWidthPixels);
+        const innerRadiusPixels = Math.max(0, meanRadiusPixels - widthPixels / 2);
+        const outerRadiusPixels = meanRadiusPixels + widthPixels / 2;
+
+        const distanceFromView = Math.hypot(
+          earthScreen.x - this.camera.width / 2,
+          earthScreen.y - this.camera.height / 2
+        );
+        if (distanceFromView - outerRadiusPixels > viewRadius) continue;
+
+        this.ctx.beginPath();
+        this.ctx.arc(earthScreen.x, earthScreen.y, outerRadiusPixels, 0, Math.PI * 2);
+        this.ctx.arc(earthScreen.x, earthScreen.y, innerRadiusPixels, 0, Math.PI * 2, true);
+        this.ctx.fill("evenodd");
+      }
+    }
+
+    this.ctx.restore();
+  }
+
+  private renderSatelliteDots(bodies: CelestialBody[], julianDate: number): void {
+    if (!this.shouldRenderSatelliteDetail()) return;
+
+    const earth = this.bodyMap.get("Earth");
+    if (!earth) return;
+
+    const maxCacheAgeDays = this.SATELLITE_POSITION_ERROR_PX
+      / (this.camera.zoom * this.SATELLITE_MAX_SPEED_KM_PER_DAY);
+    if (
+      !Number.isFinite(this.satellitePositionCacheJulianDate)
+      || Math.abs(julianDate - this.satellitePositionCacheJulianDate) > maxCacheAgeDays
+    ) {
+      this.satelliteRelativePositionCache.clear();
+      this.satellitePositionCacheJulianDate = julianDate;
+    }
+
+    const earthPosition = getBodyPosition(earth, julianDate);
+    const earthScreen = this.camera.worldToScreen(earthPosition.x, earthPosition.y);
+    const earthRadiusPixels = Math.max(
+      this.camera.kmToPixels(earth.radius),
+      MIN_DISPLAY_SIZE[earth.type]
+    );
+    const pathsByColor = new Map<string, Path2D>();
+    const highlightedSatellites: CelestialBody[] = [];
+    const dotRadius = MIN_DISPLAY_SIZE.satellite;
+
+    for (const body of bodies) {
+      if (body.type !== "satellite") continue;
+
+      let relativePosition = this.satelliteRelativePositionCache.get(body);
+      if (!relativePosition) {
+        const sampledEarthPosition = getBodyPosition(
+          earth,
+          this.satellitePositionCacheJulianDate
+        );
+        const sampledSatellitePosition = getBodyPosition(
+          body,
+          this.satellitePositionCacheJulianDate
+        );
+        relativePosition = {
+          x: sampledSatellitePosition.x - sampledEarthPosition.x,
+          y: sampledSatellitePosition.y - sampledEarthPosition.y,
+        };
+        this.satelliteRelativePositionCache.set(body, relativePosition);
+      }
+
+      const position = {
+        x: earthPosition.x + relativePosition.x,
+        y: earthPosition.y + relativePosition.y,
+      };
+      const screenPosition = this.camera.worldToScreen(position.x, position.y);
+      if (
+        screenPosition.x < -dotRadius
+        || screenPosition.x > this.camera.width + dotRadius
+        || screenPosition.y < -dotRadius
+        || screenPosition.y > this.camera.height + dotRadius
+      ) {
+        continue;
+      }
+
+      const distanceFromEarth = Math.hypot(
+        screenPosition.x - earthScreen.x,
+        screenPosition.y - earthScreen.y
+      );
+      if (distanceFromEarth <= earthRadiusPixels) continue;
+
+      if (body.name === this.hoveredBodyName || body.name === this.selectedBodyName) {
+        highlightedSatellites.push(body);
+        continue;
+      }
+
+      let path = pathsByColor.get(body.color);
+      if (!path) {
+        path = new Path2D();
+        pathsByColor.set(body.color, path);
+      }
+      path.moveTo(screenPosition.x + dotRadius, screenPosition.y);
+      path.arc(screenPosition.x, screenPosition.y, dotRadius, 0, Math.PI * 2);
+    }
+
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.9;
+    for (const [color, path] of pathsByColor) {
+      this.ctx.fillStyle = color;
+      this.ctx.fill(path);
+    }
+    this.ctx.restore();
+
+    for (const satellite of highlightedSatellites) {
+      this.renderBody(satellite, julianDate);
     }
   }
 
@@ -893,7 +1046,12 @@ export class Renderer {
     this.ctx.restore();
   }
 
-  renderAll(bodies: CelestialBody[], julianDate: number, asteroidBelt?: AsteroidBelt): void {
+  renderAll(
+    bodies: CelestialBody[],
+    julianDate: number,
+    asteroidBelt?: AsteroidBelt,
+    constellations: readonly SatelliteConstellation[] = []
+  ): void {
     this.clear();
 
     // Body membership changes only when filters or timeline data change.
@@ -904,6 +1062,8 @@ export class Renderer {
       }
       setBodyMap(bodies);
       this.indexedBodies = bodies;
+      this.satelliteRelativePositionCache.clear();
+      this.satellitePositionCacheJulianDate = Number.NaN;
     }
 
     // Draw asteroids first (behind everything)
@@ -916,10 +1076,17 @@ export class Renderer {
       this.renderOrbit(body, julianDate);
     }
 
+    // Large fleets read as orbital populations, not thousands of overlapping
+    // markers. Their shells sit behind Earth and the individual payloads.
+    this.renderConstellationBands(constellations, julianDate);
+
     // Draw bodies
     for (const body of bodies) {
+      if (body.type === "satellite") continue;
       this.renderBody(body, julianDate);
     }
+
+    this.renderSatelliteDots(bodies, julianDate);
 
     // Draw scale indicator on top
     this.renderScaleBar();
