@@ -930,22 +930,27 @@ export class Renderer {
     this.ctx.globalAlpha = 0.6;
     this.ctx.beginPath();
 
+    const zoom = this.camera.zoom;
+    const centerX = this.camera.width / 2;
+    const centerY = this.camera.height / 2;
+
     for (const pos of asteroids) {
-      const screen = this.camera.worldToScreen(pos.x, pos.y);
+      const screenX = (pos.x - this.camera.x) * zoom + centerX;
+      const screenY = (pos.y - this.camera.y) * zoom + centerY;
 
       // Skip if off screen
       if (
-        screen.x < -10 ||
-        screen.x > this.camera.width + 10 ||
-        screen.y < -10 ||
-        screen.y > this.camera.height + 10
+        screenX < -10 ||
+        screenX > this.camera.width + 10 ||
+        screenY < -10 ||
+        screenY > this.camera.height + 10
       ) {
         continue;
       }
 
       // Draw as tiny dot (1.5px radius)
-      this.ctx.moveTo(screen.x + 1.5, screen.y);
-      this.ctx.arc(screen.x, screen.y, 1.5, 0, Math.PI * 2);
+      this.ctx.moveTo(screenX + 1.5, screenY);
+      this.ctx.arc(screenX, screenY, 1.5, 0, Math.PI * 2);
     }
 
     this.ctx.fill();
