@@ -352,73 +352,88 @@ export class Renderer {
 
     // For parent-centric bodies (moons/satellites), get the current parent position
     // to apply as an offset. This ensures the orbit follows the parent smoothly.
-    let parentOffset = { x: 0, y: 0 };
+    let parentOffsetX = 0;
+    let parentOffsetY = 0;
     if (body.parentCentricElements && body.parentName) {
       const parent = this.bodyMap.get(body.parentName);
       if (parent) {
-        parentOffset = getBodyPosition(parent, julianDate);
+        const parentPosition = getBodyPosition(parent, julianDate);
+        parentOffsetX = parentPosition.x;
+        parentOffsetY = parentPosition.y;
       }
     }
 
-    // Quick bounds check - skip if entire orbit is off screen
-    const screenPoints: Array<{ x: number; y: number; visible: boolean }> = [];
+    // Stream transformed vertices directly into the canvas path. Keeping a
+    // screen-space object for every cached orbit point created substantial
+    // garbage every frame at higher orbit resolutions.
+    const zoom = this.camera.zoom;
+    const centerX = this.camera.width / 2;
+    const centerY = this.camera.height / 2;
+    const minX = -1000;
+    const maxX = this.camera.width + 1000;
+    const minY = -1000;
+    const maxY = this.camera.height + 1000;
+
     let anyVisible = false;
+    const firstPoint = orbitPoints[0];
+    const firstX = (firstPoint.x + parentOffsetX - this.camera.x) * zoom + centerX;
+    const firstY = (firstPoint.y + parentOffsetY - this.camera.y) * zoom + centerY;
+    const firstVisible = firstX >= minX && firstX <= maxX
+      && firstY >= minY && firstY <= maxY;
 
-    for (const point of orbitPoints) {
-      // Apply parent offset for parent-centric bodies (moons/satellites)
-      const worldX = point.x + parentOffset.x;
-      const worldY = point.y + parentOffset.y;
-      const screen = this.camera.worldToScreen(worldX, worldY);
-      const visible =
-        screen.x >= -1000 &&
-        screen.x <= this.camera.width + 1000 &&
-        screen.y >= -1000 &&
-        screen.y <= this.camera.height + 1000;
-      screenPoints.push({ ...screen, visible });
-      if (visible) anyVisible = true;
-    }
-
-    // Skip entirely if nothing visible
-    if (!anyVisible) return;
-
-    // Apply occlusion opacity to the orbit color (muted version of body color)
-    const baseOpacity = 0.35;
-    this.ctx.globalAlpha = baseOpacity * occlusionOpacity;
-
-    // Draw the orbit with a muted version of the body's color
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = body.color;
-    this.ctx.lineWidth = 2;
-
+    let currentX = firstX;
+    let currentY = firstY;
+    let currentVisible = firstVisible;
+    let previousVisible = false;
     let needsMove = true;
-    for (let i = 0; i < screenPoints.length; i++) {
-      const point = screenPoints[i];
-      const prevVisible = i > 0 && screenPoints[i - 1].visible;
-      const nextVisible =
-        i < screenPoints.length - 1 && screenPoints[i + 1].visible;
 
-      // Draw this point if it's visible or adjacent to a visible point
-      if (point.visible || prevVisible || nextVisible) {
+    this.ctx.beginPath();
+
+    for (let i = 0; i < orbitPoints.length; i++) {
+      let nextX = 0;
+      let nextY = 0;
+      let nextVisible = false;
+
+      if (i + 1 < orbitPoints.length) {
+        const nextPoint = orbitPoints[i + 1];
+        nextX = (nextPoint.x + parentOffsetX - this.camera.x) * zoom + centerX;
+        nextY = (nextPoint.y + parentOffsetY - this.camera.y) * zoom + centerY;
+        nextVisible = nextX >= minX && nextX <= maxX
+          && nextY >= minY && nextY <= maxY;
+      }
+
+      if (currentVisible) anyVisible = true;
+
+      if (currentVisible || previousVisible || nextVisible) {
         if (needsMove) {
-          this.ctx.moveTo(point.x, point.y);
+          this.ctx.moveTo(currentX, currentY);
           needsMove = false;
         } else {
-          this.ctx.lineTo(point.x, point.y);
+          this.ctx.lineTo(currentX, currentY);
         }
       } else {
         needsMove = true;
       }
+
+      previousVisible = currentVisible;
+      currentX = nextX;
+      currentY = nextY;
+      currentVisible = nextVisible;
     }
 
-    // Close the orbit for elliptical paths
+    // Close elliptical paths when either endpoint is near the viewport.
     const eccentricity = body.elements?.e ?? body.parentCentricElements?.e ?? 1;
-    if (eccentricity < 1 && !needsMove) {
-      const first = screenPoints[0];
-      if (first.visible || screenPoints[screenPoints.length - 1].visible) {
-        this.ctx.lineTo(first.x, first.y);
-      }
+    if (eccentricity < 1 && !needsMove && (previousVisible || firstVisible)) {
+      this.ctx.lineTo(firstX, firstY);
     }
 
+    // Skip entirely if nothing was near the viewport.
+    if (!anyVisible) return;
+
+    // Draw the orbit with a muted version of the body's color.
+    this.ctx.globalAlpha = 0.35 * occlusionOpacity;
+    this.ctx.strokeStyle = body.color;
+    this.ctx.lineWidth = 2;
     this.ctx.stroke();
     this.ctx.globalAlpha = 1;
   }
