@@ -72,6 +72,14 @@ const zoomLevelEl = document.getElementById('zoom-level')!;
 const orbitResolutionEl = document.getElementById('orbit-resolution')!;
 const speedButtons = document.querySelectorAll('.speed-option') as NodeListOf<HTMLButtonElement>;
 const moonButtons = document.querySelectorAll('.moon-option') as NodeListOf<HTMLButtonElement>;
+const UI_UPDATE_INTERVAL_MS = 100;
+let lastUIUpdateMs = Number.NEGATIVE_INFINITY;
+
+function setTextIfChanged(element: HTMLElement, text: string): void {
+  if (element.textContent !== text) {
+    element.textContent = text;
+  }
+}
 
 // Set up speed selector
 speedButtons.forEach(btn => {
@@ -400,15 +408,19 @@ function animate(): void {
   // Render everything (asteroids first, then orbits, then bodies)
   renderer.renderAll(bodies, time.currentJulian, asteroidBelt);
 
-  // Update UI
-  dateDisplay.textContent = time.formatDate();
-  currentSpeedEl.textContent = `speed ${time.timeScale.toFixed(0)}`;
-  zoomLevelEl.textContent = `zoom ${camera.zoom.toExponential(1)}`;
-  orbitResolutionEl.textContent = `${renderer.getOrbitResolution()} pts`;
+  // Text does not need animation-frame cadence. Avoid layout work when the
+  // formatted values have not changed.
+  if (now - lastUIUpdateMs >= UI_UPDATE_INTERVAL_MS) {
+    setTextIfChanged(dateDisplay, time.formatDate());
+    setTextIfChanged(currentSpeedEl, `speed ${time.timeScale.toFixed(0)}`);
+    setTextIfChanged(zoomLevelEl, `zoom ${camera.zoom.toExponential(1)}`);
+    setTextIfChanged(orbitResolutionEl, `${renderer.getOrbitResolution()} pts`);
 
-  // Update sidebar if visible
-  if (sidebar.isVisible()) {
-    sidebar.update(time.currentJulian);
+    if (sidebar.isVisible()) {
+      sidebar.update(time.currentJulian);
+    }
+
+    lastUIUpdateMs = now;
   }
 
   requestAnimationFrame(animate);

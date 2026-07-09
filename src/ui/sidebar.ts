@@ -11,6 +11,7 @@ let onCloseCallback: (() => void) | null = null;
 let wikipediaSummary: string | null = null;
 let wikipediaUrl: string | null = null;
 let isLoadingWikipedia = false;
+let lastRenderedHtml = '';
 
 // Close button handler
 closeBtn.addEventListener('click', () => {
@@ -23,6 +24,7 @@ closeBtn.addEventListener('click', () => {
 
 export function show(body: CelestialBody, julianDate: number): void {
   selectedBody = body;
+  lastRenderedHtml = '';
   sidebar.classList.remove('hidden');
 
   // Reset Wikipedia state
@@ -272,7 +274,10 @@ export function update(julianDate: number): void {
     `;
   }
 
-  sidebarContent.innerHTML = html;
+  if (html !== lastRenderedHtml) {
+    sidebarContent.innerHTML = html;
+    lastRenderedHtml = html;
+  }
 }
 
 function formatBodyType(type: string): string {
