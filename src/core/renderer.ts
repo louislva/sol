@@ -47,7 +47,8 @@ export class Renderer {
 
   private readonly bgColor = "#000000";
   private readonly labelColor = "#cccccc";
-  private readonly SATELLITE_DETAIL_EARTH_RADIUS_PX = 30;
+  private readonly SATELLITE_SYSTEM_RADIUS_KM = 45_000;
+  private readonly SATELLITE_DETAIL_MIN_RADIUS_PX = 8;
   private readonly SATELLITE_MAX_SPEED_KM_PER_DAY = 700_000;
   private readonly SATELLITE_POSITION_ERROR_PX = 0.5;
   private satelliteRelativePositionCache = new Map<CelestialBody, { x: number; y: number }>();
@@ -310,17 +311,17 @@ export class Renderer {
     }
   }
 
-  private shouldRenderSatelliteDetail(): boolean {
-    const earth = this.bodyMap.get("Earth");
-    return earth !== undefined
-      && this.camera.kmToPixels(earth.radius) >= this.SATELLITE_DETAIL_EARTH_RADIUS_PX;
+  isSatelliteDetailVisible(): boolean {
+    return this.bodyMap.has("Earth")
+      && this.camera.kmToPixels(this.SATELLITE_SYSTEM_RADIUS_KM)
+        >= this.SATELLITE_DETAIL_MIN_RADIUS_PX;
   }
 
   private renderConstellationBands(
     constellations: readonly SatelliteConstellation[],
     julianDate: number
   ): void {
-    if (constellations.length === 0 || !this.shouldRenderSatelliteDetail()) return;
+    if (constellations.length === 0 || !this.isSatelliteDetailVisible()) return;
 
     const earth = this.bodyMap.get("Earth");
     if (!earth) return;
@@ -362,7 +363,7 @@ export class Renderer {
   }
 
   private renderSatelliteDots(bodies: CelestialBody[], julianDate: number): void {
-    if (!this.shouldRenderSatelliteDetail()) return;
+    if (!this.isSatelliteDetailVisible()) return;
 
     const earth = this.bodyMap.get("Earth");
     if (!earth) return;

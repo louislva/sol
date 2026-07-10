@@ -298,7 +298,7 @@ function getHoveredBody(julianDate: number): HoverResult | null {
   for (const body of bodies) {
     if (
       body.type === 'satellite'
-      && camera.kmToPixels(bodyMap.get('Earth')?.radius ?? 0) < 30
+      && !renderer.isSatelliteDetailVisible()
     ) {
       continue;
     }
