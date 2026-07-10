@@ -47,6 +47,14 @@ export class Camera {
     return this._zoom;
   }
 
+  setView(centerX: number, centerY: number, zoom: number): void {
+    const clampedZoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoom));
+    this.x = centerX;
+    this.y = centerY;
+    this._zoom = clampedZoom;
+    this._targetZoom = clampedZoom;
+  }
+
   resize(canvas: HTMLCanvasElement): void {
     // Handle high DPI displays
     const dpr = window.devicePixelRatio || 1;

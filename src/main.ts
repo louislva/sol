@@ -2,7 +2,13 @@ import './style.css';
 import { Camera } from './core/camera';
 import { Renderer } from './core/renderer';
 import { TimeSystem, type SpeedMode } from './core/time';
-import { allBodies, type CelestialBody, getBodyPosition, getOrbitPath } from './astronomy/bodies';
+import {
+  allBodies,
+  type CelestialBody,
+  getBodyPosition,
+  getOrbitPath,
+  setBodyMap,
+} from './astronomy/bodies';
 import { filterMoons } from './data/moons';
 import { allProbes } from './data/probes';
 import { allComets } from './data/comets';
@@ -23,13 +29,6 @@ const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const camera = new Camera(canvas);
 const renderer = new Renderer(canvas, camera);
 const time = new TimeSystem();
-
-// Set initial view to Sun, zoomed all the way in
-// Sun is at (0, 0), radius is ~695,700 km
-camera.x = 0;
-camera.y = 0;
-camera['_zoom'] = 0.002;
-camera['_targetZoom'] = 0.002;
 
 // Current moon filter level
 let currentMoonFilter: MoonCategory = 'medium';
@@ -57,6 +56,47 @@ function buildBodies(julianDate?: number): CelestialBody[] {
 
 // Combine all celestial bodies
 let bodies: CelestialBody[] = buildBodies();
+
+function frameEarthAndMoon(): void {
+  const earth = bodies.find((body) => body.name === 'Earth');
+  const moon = bodies.find((body) => body.name === 'Moon');
+  if (!earth || !moon) return;
+
+  setBodyMap(bodies);
+  const earthPosition = getBodyPosition(earth, time.currentJulian);
+  const moonPosition = getBodyPosition(moon, time.currentJulian);
+  const earthSystemRadiusKm = 50_000;
+  const bounds = {
+    minX: Math.min(earthPosition.x - earthSystemRadiusKm, moonPosition.x),
+    maxX: Math.max(earthPosition.x + earthSystemRadiusKm, moonPosition.x),
+    minY: Math.min(earthPosition.y - earthSystemRadiusKm, moonPosition.y),
+    maxY: Math.max(earthPosition.y + earthSystemRadiusKm, moonPosition.y),
+  };
+  const viewCenter = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+
+  // Reserve the bottom of the viewport for the time and moon controls.
+  const horizontalPadding = Math.min(80, camera.width * 0.15);
+  const topPadding = 40;
+  const bottomPadding = camera.width <= 600 ? 180 : 220;
+  const availableWidth = Math.max(1, camera.width - horizontalPadding * 2);
+  const availableHeight = Math.max(1, camera.height - topPadding - bottomPadding);
+  const contentWidthKm = bounds.maxX - bounds.minX;
+  const contentHeightKm = bounds.maxY - bounds.minY;
+  const zoom = Math.min(
+    contentWidthKm > 0 ? availableWidth / contentWidthKm : Number.POSITIVE_INFINITY,
+    contentHeightKm > 0 ? availableHeight / contentHeightKm : Number.POSITIVE_INFINITY,
+    0.0015
+  );
+
+  const desiredScreenCenterY = (topPadding + camera.height - bottomPadding) / 2;
+  const centerYOffsetKm = (camera.height / 2 - desiredScreenCenterY) / zoom;
+  camera.setView(viewCenter.x, viewCenter.y + centerYOffsetKm, zoom);
+}
+
+frameEarthAndMoon();
 
 // Load spacecraft data asynchronously
 loadSpacecraftData().then(() => {
@@ -494,8 +534,6 @@ const sol: SolAPI = {
     const body = bodies.find(b => b.name.toLowerCase() === bodyName.toLowerCase());
     if (!body) return `Body "${bodyName}" not found. Use sol.findBody("${bodyName}") to search.`;
     const pos = getBodyPosition(body, time.currentJulian);
-    camera.x = pos.x;
-    camera.y = pos.y;
     // Auto-zoom based on body type
     const zoomLevels: Record<string, number> = {
       star: 0.000001,
@@ -507,8 +545,7 @@ const sol: SolAPI = {
       satellite: 0.01,
     };
     const targetZoom = zoomLevels[body.type] || 0.00005;
-    camera['_zoom'] = targetZoom;
-    camera['_targetZoom'] = targetZoom;
+    camera.setView(pos.x, pos.y, targetZoom);
     return `Navigated to ${body.name} at (${(pos.x / AU_KM_CONST).toFixed(3)} AU, ${(pos.y / AU_KM_CONST).toFixed(3)} AU)`;
   },
 
@@ -531,22 +568,19 @@ const sol: SolAPI = {
   },
 
   zoom(level: number) {
-    camera['_zoom'] = level;
-    camera['_targetZoom'] = level;
+    camera.setView(camera.x, camera.y, level);
     return `Zoom set to ${level.toExponential(2)}`;
   },
 
   zoomIn(factor = 3) {
     const newZoom = Math.min(1, camera.zoom * factor);
-    camera['_zoom'] = newZoom;
-    camera['_targetZoom'] = newZoom;
+    camera.setView(camera.x, camera.y, newZoom);
     return `Zoomed in to ${newZoom.toExponential(2)}`;
   },
 
   zoomOut(factor = 3) {
     const newZoom = Math.max(1e-12, camera.zoom / factor);
-    camera['_zoom'] = newZoom;
-    camera['_targetZoom'] = newZoom;
+    camera.setView(camera.x, camera.y, newZoom);
     return `Zoomed out to ${newZoom.toExponential(2)}`;
   },
 
