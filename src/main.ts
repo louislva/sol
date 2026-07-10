@@ -1,6 +1,7 @@
 import './style.css';
 import { Camera } from './core/camera';
 import { Renderer } from './core/renderer';
+import { PlanetFollower } from './core/planetFollower';
 import { TimeSystem, type SpeedMode } from './core/time';
 import {
   allBodies,
@@ -28,6 +29,7 @@ const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 // Initialize systems
 const camera = new Camera(canvas);
 const renderer = new Renderer(canvas, camera);
+const planetFollower = new PlanetFollower(camera);
 const time = new TimeSystem();
 
 // Current moon filter level
@@ -463,6 +465,8 @@ function animate(): void {
     lastBodiesRebuildJD = time.currentJulian;
   }
 
+  planetFollower.update(bodies, time.currentJulian);
+
   // Hit testing is expensive, so run it immediately after pointer/camera input
   // and periodically while the pointer rests over moving bodies.
   const now = performance.now();
@@ -531,7 +535,14 @@ interface SolAPI {
   listBodies(): string[];
   findBody(query: string): string[];
   getBody(name: string): { name: string; type: string; x: number; y: number; xAU: number; yAU: number } | null;
-  status(): { date: string; speed: string; zoom: number; center: { x: number; y: number }; centerAU: { x: number; y: number } };
+  status(): {
+    date: string;
+    speed: string;
+    zoom: number;
+    followingPlanet: string | null;
+    center: { x: number; y: number };
+    centerAU: { x: number; y: number };
+  };
 
   // Selection
   select(bodyName: string): string;
@@ -664,6 +675,7 @@ const sol: SolAPI = {
       date: time.formatDate(),
       speed: `${time.timeScale.toFixed(0)} sec/sec (${time.speedMode})`,
       zoom: camera.zoom,
+      followingPlanet: planetFollower.targetName,
       center: { x: camera.x, y: camera.y },
       centerAU: { x: camera.x / AU_KM_CONST, y: camera.y / AU_KM_CONST },
     };
