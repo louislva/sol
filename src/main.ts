@@ -66,34 +66,47 @@ function frameEarthAndMoon(): void {
   const earthPosition = getBodyPosition(earth, time.currentJulian);
   const moonPosition = getBodyPosition(moon, time.currentJulian);
   const earthSystemRadiusKm = 50_000;
-  const bounds = {
-    minX: Math.min(earthPosition.x - earthSystemRadiusKm, moonPosition.x),
-    maxX: Math.max(earthPosition.x + earthSystemRadiusKm, moonPosition.x),
-    minY: Math.min(earthPosition.y - earthSystemRadiusKm, moonPosition.y),
-    maxY: Math.max(earthPosition.y + earthSystemRadiusKm, moonPosition.y),
-  };
-  const viewCenter = {
-    x: (bounds.minX + bounds.maxX) / 2,
-    y: (bounds.minY + bounds.maxY) / 2,
-  };
 
-  // Reserve the bottom of the viewport for the time and moon controls.
+  // Earth stays at the literal viewport center. Fit the Moon into the space
+  // around it while reserving the bottom of the viewport for the controls.
   const horizontalPadding = Math.min(80, camera.width * 0.15);
   const topPadding = 40;
   const bottomPadding = camera.width <= 600 ? 180 : 220;
-  const availableWidth = Math.max(1, camera.width - horizontalPadding * 2);
-  const availableHeight = Math.max(1, camera.height - topPadding - bottomPadding);
-  const contentWidthKm = bounds.maxX - bounds.minX;
-  const contentHeightKm = bounds.maxY - bounds.minY;
+  const moonMargin = 28;
+  const screenCenterX = camera.width / 2;
+  const screenCenterY = camera.height / 2;
+  const room = {
+    left: Math.max(1, screenCenterX - horizontalPadding),
+    right: Math.max(1, camera.width - horizontalPadding - screenCenterX),
+    top: Math.max(1, screenCenterY - topPadding),
+    bottom: Math.max(1, camera.height - bottomPadding - screenCenterY),
+  };
+  const moonOffset = {
+    x: moonPosition.x - earthPosition.x,
+    y: moonPosition.y - earthPosition.y,
+  };
+  const zoomForOffset = (
+    offsetKm: number,
+    negativeRoomPixels: number,
+    positiveRoomPixels: number
+  ): number => {
+    if (offsetKm === 0) return Number.POSITIVE_INFINITY;
+    const availablePixels = offsetKm < 0
+      ? negativeRoomPixels
+      : positiveRoomPixels;
+    return Math.max(1, availablePixels - moonMargin) / Math.abs(offsetKm);
+  };
   const zoom = Math.min(
-    contentWidthKm > 0 ? availableWidth / contentWidthKm : Number.POSITIVE_INFINITY,
-    contentHeightKm > 0 ? availableHeight / contentHeightKm : Number.POSITIVE_INFINITY,
+    room.left / earthSystemRadiusKm,
+    room.right / earthSystemRadiusKm,
+    room.top / earthSystemRadiusKm,
+    room.bottom / earthSystemRadiusKm,
+    zoomForOffset(moonOffset.x, room.left, room.right),
+    zoomForOffset(moonOffset.y, room.top, room.bottom),
     0.0015
   );
 
-  const desiredScreenCenterY = (topPadding + camera.height - bottomPadding) / 2;
-  const centerYOffsetKm = (camera.height / 2 - desiredScreenCenterY) / zoom;
-  camera.setView(viewCenter.x, viewCenter.y + centerYOffsetKm, zoom);
+  camera.setView(earthPosition.x, earthPosition.y, zoom);
 }
 
 frameEarthAndMoon();
