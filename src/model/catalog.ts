@@ -184,6 +184,8 @@ export class Catalog {
   readonly bodies: Body[] = [];
   private readonly byName = new Map<string, Body>();
   readonly sun: Body;
+  /** Julian dates the planet model is valid for (JPL Table 2: 3000 BC – 3000 AD). */
+  readonly validSpan: [number, number] = [planetData.tables[1].validFrom, planetData.tables[1].validTo];
 
   constructor() {
     this.sun = this.add({

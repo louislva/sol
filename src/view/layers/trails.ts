@@ -46,8 +46,10 @@ export class TrailLayer {
   draw(ctx: CanvasRenderingContext2D, world: World, camera: Camera, body: Body, frame: Target, alpha: number): void {
     const t = world.time;
     let trail = this.trails.get(body);
-    const head = trail?.times[trail.times.length - 1];
-    if (!trail || !sameTarget(trail.frame, frame) || head === undefined || t < head) {
+    // Running backward, the trail is cut back to now; it is rebuilt only
+    // once nothing of it is left.
+    if (trail) this.truncate(trail, t);
+    if (!trail || !sameTarget(trail.frame, frame) || trail.times.length < 2) {
       trail = this.build(world, body, frame, t);
       this.trails.set(body, trail);
     } else {
@@ -129,6 +131,16 @@ export class TrailLayer {
     xs.reverse();
     ys.reverse();
     return { frame, times, xs, ys, step: MIN_STEP_DAYS };
+  }
+
+  private truncate(trail: Trail, t: number): void {
+    const { times } = trail;
+    let keep = times.length;
+    while (keep > 0 && times[keep - 1] > t) keep--;
+    if (keep === times.length) return;
+    times.length = keep;
+    trail.xs.length = keep;
+    trail.ys.length = keep;
   }
 
   private extend(world: World, body: Body, trail: Trail, t: number): void {

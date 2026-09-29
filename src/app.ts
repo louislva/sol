@@ -13,7 +13,7 @@ import { AsteroidPopulation } from "./model/asteroidPopulation";
 import type { EphemerisFile, EphemerisSeries, MissionFile } from "./model/catalog";
 import { SatellitePopulation } from "./model/satellitePopulation";
 import { sameTarget, type Target, World } from "./model/world";
-import { Controls, formatRate } from "./ui/controls";
+import { Controls } from "./ui/controls";
 import { Sidebar } from "./ui/sidebar";
 import { Camera } from "./view/camera";
 import { InputController } from "./view/input";
@@ -82,8 +82,20 @@ export class App {
       toggleFollow: (target) => (sameTarget(this.followed, target) ? this.unfollow() : this.follow(target)),
       watchFromLaunch: (body) => void this.watchFromLaunch(body),
     });
+    this.clock.bounds = this.world.catalog.validSpan;
     this.controls = new Controls({
-      speed: (mode) => this.setSpeed(mode),
+      shuttle: (direction) => this.clock.shuttle(direction),
+      togglePause: () => this.togglePause(),
+      speed: (magnitude) => {
+        this.clock.setSpeed(magnitude);
+        this.clock.paused = false;
+      },
+      auto: () => {
+        this.clock.auto = true;
+        this.clock.paused = false;
+      },
+      now: () => this.setDate(new Date()),
+      date: (date) => this.setDate(date),
       moons: (category) => this.setMoonCategory(category),
       mission: (name) => {
         const body = this.world.catalog.get(name);
@@ -208,12 +220,11 @@ export class App {
   private refreshUi(): void {
     const frameName = this.world.name(this.frameTarget);
     const status = [
-      formatRate(this.clock.rate),
       `${this.followed ? "following" : "frame"} ${frameName}`,
       `zoom ${this.camera.zoom.toExponential(1)}`,
     ].join(" · ");
-    this.controls.setText(this.clock.format(), status);
-    this.controls.setSpeedMode(this.clock.mode);
+    this.controls.setText(this.clock.format(), status, this.clock.date);
+    this.controls.setClock(this.clock);
     if (this.sidebar.visible) this.sidebar.update(this.world, this.isFollowing(this.selected));
   }
 
@@ -256,9 +267,29 @@ export class App {
     });
 
     window.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      if (this.followed) this.unfollow();
-      else this.select(null);
+      if (event.target instanceof HTMLInputElement && event.target.type === "text") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      switch (event.key) {
+        case "Escape":
+          if (this.followed) this.unfollow();
+          else this.select(null);
+          return;
+        case " ":
+          this.togglePause();
+          break;
+        case "ArrowLeft":
+          this.clock.shuttle(-1);
+          break;
+        case "ArrowRight":
+          this.clock.shuttle(1);
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+      // Keep a focused button from also "clicking" on Space.
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      this.controls.setClock(this.clock);
     });
   }
 
@@ -348,6 +379,8 @@ export class App {
   }
 
   private setJulianDate(jd: number): void {
+    const [first, last] = this.clock.bounds;
+    jd = Math.min(last, Math.max(first, jd));
     this.clock.julianDate = jd;
     this.world.setTime(jd);
     this.world.position(this.frameTarget, this.scratch);
@@ -356,7 +389,12 @@ export class App {
 
   setSpeed(mode: SpeedMode): void {
     this.clock.setMode(mode);
-    this.controls.setSpeedMode(mode);
+    this.controls.setClock(this.clock);
+  }
+
+  togglePause(): void {
+    this.clock.paused = !this.clock.paused;
+    this.controls.setClock(this.clock);
   }
 
   setMoonCategory(category: MoonCategory): void {

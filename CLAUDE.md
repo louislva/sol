@@ -152,9 +152,10 @@ sol.zoomOut(3)             // Zoom out by factor (default 3x)
 ```js
 sol.setDate("2024-07-04")  // Jump to a specific date (ISO format)
 sol.setSpeed("year")       // Set speed mode: auto|realtime|day|month|year
-sol.setTimeScale(86400)    // Set exact time scale (simulated sec per real sec)
-sol.pause()                // Pause time (sets scale to 0)
-sol.resume()               // Resume with auto speed
+sol.setTimeScale(86400)    // Set exact time scale (simulated sec per real sec; negative runs backward)
+sol.pause()                // Pause time
+sol.resume()               // Resume forward with auto speed
+sol.reverse()              // Flip the direction of time
 sol.getDate()              // Get current simulation date string
 ```
 

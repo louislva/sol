@@ -57,16 +57,55 @@ body {
   pointer-events: none;
 }
 
-#date-display {
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text);
-  opacity: 0.8;
+#date-row {
+  pointer-events: auto;
+  display: flex;
+  justify-content: center;
+  min-height: 30px;
 }
 
-#speed-selector {
+#date-display,
+#date-input {
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+#date-display {
+  background: transparent;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  opacity: 0.8;
+  cursor: text;
+  transition: all 0.2s ease;
+}
+
+#date-display:hover {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+#date-input {
+  width: 22ch;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  outline: none;
+}
+
+#date-input.invalid {
+  border-color: #ff6666;
+}
+
+#date-display.hidden,
+#date-input.hidden {
+  display: none;
+}
+
+#transport {
   display: flex;
   align-items: center;
   pointer-events: auto;
@@ -76,27 +115,121 @@ body {
   gap: 2px;
 }
 
-.speed-option {
+.transport-button,
+.transport-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   color: var(--text-dim);
   font-family: inherit;
   font-size: 12px;
-  padding: 8px 14px;
   cursor: pointer;
   transition: all 0.2s ease;
   border-radius: 6px;
   white-space: nowrap;
 }
 
-.speed-option:hover {
+.transport-button {
+  width: 36px;
+  height: 34px;
+  padding: 0;
+}
+
+.transport-toggle {
+  padding: 8px 12px;
+}
+
+.transport-button svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.transport-button:hover,
+.transport-toggle:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
 }
 
-.speed-option.active {
+.transport-button.active,
+.transport-toggle.active {
   background: rgba(255, 255, 255, 0.15);
   color: var(--text);
+}
+
+#play-pause {
+  color: var(--text);
+}
+
+#play-pause .icon-play,
+#play-pause.paused .icon-pause {
+  display: none;
+}
+
+#play-pause.paused .icon-play {
+  display: block;
+}
+
+#speed-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 160px;
+  height: 20px;
+  margin: 0 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+#speed-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+}
+
+#speed-slider::-moz-range-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+}
+
+#speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--text);
+  border: none;
+}
+
+#speed-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: none;
+}
+
+/* Under auto speed the thumb shows where the view has set it. */
+#speed-slider.auto::-webkit-slider-thumb {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-dim);
+}
+
+#speed-slider.auto::-moz-range-thumb {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-dim);
+}
+
+#speed-readout {
+  min-width: 11ch;
+  margin-right: 4px;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
 }
 
 #moon-selector {
@@ -295,21 +428,37 @@ body {
     gap: 8px;
   }
 
-  #date-display {
+  #date-display,
+  #date-input {
     font-size: 13px;
   }
 
-  #speed-selector {
+  #transport {
     width: 100%;
     justify-content: center;
     gap: 0;
     padding: 3px;
   }
 
-  .speed-option {
-    flex: 0 1 auto;
+  .transport-button {
+    width: 30px;
+  }
+
+  .transport-toggle {
     font-size: 11px;
-    padding: 7px;
+    padding: 7px 6px;
+  }
+
+  #speed-slider {
+    flex: 1 1 60px;
+    min-width: 40px;
+    margin: 0 4px;
+  }
+
+  #speed-readout {
+    min-width: 0;
+    margin-right: 6px;
+    font-size: 11px;
   }
 
   #moon-selector {

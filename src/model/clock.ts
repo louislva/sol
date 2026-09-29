@@ -2,6 +2,7 @@
 
 import { dateToJulian, julianToDate, SECONDS_PER_DAY } from "../astro/constants";
 
+/** Named speeds (the console's `sol.setSpeed`). */
 export type SpeedMode = "auto" | "realtime" | "day" | "month" | "year";
 
 /** Simulated seconds per real second for each fixed speed. */
@@ -48,43 +49,105 @@ export function autoSpeedForZoom(zoom: number): number {
   return Math.min(AUTO_SPEED_MAX, Math.max(1, speed));
 }
 
+/** Manual speeds range over these magnitudes (simulated s per s): realtime to ten years per second. */
+export const MIN_SPEED = 1;
+export const MAX_SPEED = 10 * 31_557_600;
+
+/** Speeds that fast-forward and rewind step through. */
+const SPEED_LADDER = [1, 60, 3_600, 86_400, 604_800, 2_629_800, 31_557_600, 315_576_000];
+
 export class Clock {
   julianDate: number;
-  /** "custom" means an explicit rate set programmatically (including 0, paused). */
-  mode: SpeedMode | "custom" = "auto";
-  /** Simulated seconds per real second. */
-  rate = 1;
+  /** Speed chosen by the view (zoom, or the followed object's pace) rather than by hand. */
+  auto = true;
+  /** Manual speed magnitude, simulated seconds per real second. */
+  speed = 86_400;
+  direction: 1 | -1 = 1;
+  paused = false;
+  /** Time stays within [start, end] (JD); reaching either end pauses. */
+  bounds: [number, number] = [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY];
+  private autoSpeed = 1;
 
   constructor(start: Date = new Date()) {
     this.julianDate = dateToJulian(start);
   }
 
-  setMode(mode: SpeedMode): void {
-    this.mode = mode;
-    if (mode !== "auto") this.rate = SPEEDS[mode];
+  /** Speed magnitude in effect, auto or manual. */
+  get magnitude(): number {
+    return this.auto ? this.autoSpeed : this.speed;
   }
 
-  /** Set an explicit rate (0 pauses). */
+  /** Signed simulated seconds per real second (0 while paused). */
+  get rate(): number {
+    return this.paused ? 0 : this.direction * this.magnitude;
+  }
+
+  /** Name of the speed mode, for display and the console. */
+  get mode(): string {
+    if (this.paused) return "paused";
+    if (this.auto) return "auto";
+    const preset = (Object.keys(SPEEDS) as (keyof typeof SPEEDS)[]).find((mode) => SPEEDS[mode] === this.speed);
+    return preset ?? "custom";
+  }
+
+  setMode(mode: SpeedMode): void {
+    this.paused = false;
+    this.direction = 1;
+    if (mode === "auto") this.auto = true;
+    else this.setSpeed(SPEEDS[mode]);
+  }
+
+  /** A manual speed magnitude; the direction is kept. */
+  setSpeed(magnitude: number): void {
+    this.auto = false;
+    this.speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, magnitude));
+  }
+
+  /** A signed rate; 0 pauses. */
   setRate(rate: number): void {
-    this.mode = "custom";
-    this.rate = rate;
+    if (rate === 0) {
+      this.paused = true;
+      return;
+    }
+    this.paused = false;
+    this.direction = rate < 0 ? -1 : 1;
+    this.setSpeed(Math.abs(rate));
   }
 
   /**
-   * @param pacedRate in auto mode, a rate to use instead of the zoom-based
+   * Fast-forward (1) or rewind (−1): play in that direction, or, if already
+   * playing that way, step up to the next faster speed.
+   */
+  shuttle(direction: 1 | -1): void {
+    if (this.paused || this.direction !== direction) {
+      this.paused = false;
+      this.direction = direction;
+      return;
+    }
+    const current = this.magnitude;
+    this.setSpeed(SPEED_LADDER.find((speed) => speed > current * 1.01) ?? MAX_SPEED);
+  }
+
+  /**
+   * @param pacedRate in auto mode, a speed to use instead of the zoom-based
    *   one (e.g. pacing a followed spacecraft's motion); smoothed over time.
    */
   advance(realMs: number, zoom: number, pacedRate?: number): void {
-    if (this.mode === "auto") {
-      const target = pacedRate ?? autoSpeedForZoom(zoom);
-      // Ease toward the target in log space so pace changes feel natural.
-      const blend = 1 - Math.exp(-Math.min(realMs, MAX_STEP_MS) / PACE_TIME_CONSTANT_MS);
-      this.rate = pacedRate === undefined
-        ? target
-        : Math.exp(Math.log(Math.max(1, this.rate)) + (Math.log(target) - Math.log(Math.max(1, this.rate))) * blend);
-    }
     const stepMs = Math.min(realMs, MAX_STEP_MS);
-    this.julianDate += (stepMs / 1000) * this.rate / SECONDS_PER_DAY;
+    if (this.auto) {
+      if (pacedRate === undefined) {
+        this.autoSpeed = autoSpeedForZoom(zoom);
+      } else {
+        // Ease toward the target in log space so pace changes feel natural.
+        const blend = 1 - Math.exp(-stepMs / PACE_TIME_CONSTANT_MS);
+        const from = Math.log(Math.max(1, this.autoSpeed));
+        this.autoSpeed = Math.exp(from + (Math.log(pacedRate) - from) * blend);
+      }
+    }
+    const next = this.julianDate + (stepMs / 1000) * this.rate / SECONDS_PER_DAY;
+    const [first, last] = this.bounds;
+    if (next < first || next > last) this.paused = true;
+    this.julianDate = Math.min(last, Math.max(first, next));
   }
 
   setDate(date: Date): void {
@@ -95,8 +158,18 @@ export class Clock {
     return julianToDate(this.julianDate);
   }
 
+  /**
+   * The date, with the time of day as far as it changes slowly enough to
+   * read: seconds near realtime, minutes up to a day per second.
+   */
   format(): string {
     const date = this.date;
-    return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+    const year = date.getUTCFullYear();
+    const day = `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${year > 0 ? year : `${1 - year} BC`}`;
+    const speed = this.paused ? 0 : this.magnitude;
+    if (speed > 86_400) return day;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const time = `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
+    return speed > 60 ? `${day} ${time} UTC` : `${day} ${time}:${pad(date.getUTCSeconds())} UTC`;
   }
 }

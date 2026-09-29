@@ -24,8 +24,9 @@ Navigation:
 Time:
   sol.setDate("2024-07-04")  Jump to a date (ISO)
   sol.setSpeed("year")       auto | realtime | day | month | year
-  sol.setTimeScale(86400)    Exact rate in simulated seconds per second
-  sol.pause() / resume()
+  sol.setTimeScale(86400)    Exact rate in simulated s per s (negative runs backward)
+  sol.pause() / resume()     resume = forward at auto speed
+  sol.reverse()              Flip the direction of time
   sol.getDate()
 
 Info:
@@ -109,12 +110,16 @@ export function installConsoleApi(app: App): void {
       return `Rate ${rate} s/s (${rate / 86_400} days/s)`;
     },
     pause() {
-      clock.setRate(0);
+      clock.paused = true;
       return "Paused";
     },
     resume() {
       app.setSpeed("auto");
       return "Resumed (auto speed)";
+    },
+    reverse() {
+      clock.direction = clock.direction > 0 ? -1 : 1;
+      return clock.direction > 0 ? "Forward" : "Reverse";
     },
     getDate() {
       return clock.format();
