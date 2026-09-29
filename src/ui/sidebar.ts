@@ -1,6 +1,7 @@
 /** Info panel for the selected object. */
 
 import { AU_KM, DEG, EARTH_EQUATORIAL_RADIUS_KM, julianToDate } from "../astro/constants";
+import { LIGHT_YEAR_KM } from "../astro/galactic";
 import { type Body, orbitAt, segmentAt } from "../model/body";
 import { sameTarget, type Target, type World } from "../model/world";
 import { fetchWikipediaSummary, type WikipediaSummary } from "./wikipedia";
@@ -144,6 +145,12 @@ function articleCandidates(target: Target, world: World): string[] {
   const name = world.name(target);
   const plain = name.replace(/\s*\([^)]*\)/g, "").trim();
   if (target.type === "satellite" || target.type === "asteroid") return [plain];
+  if (target.type === "star") {
+    const stars = world.stars!;
+    const designation = stars.designations[target.index];
+    // Wikipedia titles nearby stars by name or catalog number ("Ross 248", "Gliese 445").
+    return [...new Set([name, designation.replace(/^GJ /, "Gliese "), `${name} (star)`])];
+  }
   const body = target.body;
   switch (body.kind) {
     case "moon": return [`${name} (moon)`, name];
@@ -171,6 +178,7 @@ function color(target: Target, world: World): string {
     case "body": return target.body.color;
     case "satellite": return world.satellites!.colorOf(target.index);
     case "asteroid": return "#aaaaaa";
+    case "star": return world.stars!.colorOf(target.index);
   }
 }
 
@@ -188,6 +196,10 @@ function subtitle(target: Target, world: World): string {
       return `Earth satellite · ${constellation ? `${constellation} · ` : ""}${satellites.categoryOf(target.index)}`;
     }
     case "asteroid": return "Asteroid";
+    case "star": {
+      const type = world.stars!.spectralTypes[target.index];
+      return type ? `Star · ${type}` : "Star";
+    }
   }
 }
 
@@ -234,7 +246,44 @@ function describe(target: Target, world: World): Section[] {
         { title: "Data", rows: [["Source", "JPL Small-Body Database"]] },
       ];
     }
+    case "star": return describeStar(target.index, world);
   }
+}
+
+function describeStar(index: number, world: World): Section[] {
+  const stars = world.stars!;
+  const t = world.time;
+  const here = [0, 0, 0];
+  stars.positionAt(index, t, here);
+  const distance = Math.hypot(here[0], here[1], here[2]);
+  // Straight-line motion: the closest approach to the Sun is where the
+  // position is perpendicular to the velocity.
+  const later = [0, 0, 0];
+  stars.positionAt(index, t + 365.25, later);
+  const v = [later[0] - here[0], later[1] - here[1], later[2] - here[2]];
+  const vv = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+  const years = vv > 0 ? -(here[0] * v[0] + here[1] * v[1] + here[2] * v[2]) / vv : 0;
+  const closest = Math.hypot(here[0] + v[0] * years, here[1] + v[1] * years, here[2] + v[2] * years);
+  const magnitude = stars.magnitudes[index];
+  const band = stars.bands[index];
+  const rows: Row[] = [
+    ["Distance from Sun", formatDistance(distance)],
+    ["Space velocity", `${stars.speedOf(index).toFixed(1)} km/s${stars.radialVelocityKnown[index] ? "" : " (radial unknown)"}`],
+  ];
+  if (Math.abs(years) > 1) {
+    const when = julianToDate(t + years * 365.25).getUTCFullYear();
+    rows.push([years > 0 ? "Closest to Sun" : "Was closest", `${formatDistance(closest)} in ${when > 0 ? when : `${1 - when} BC`}`]);
+  }
+  const physical: Row[] = [];
+  const spectralType = stars.spectralTypes[index];
+  if (spectralType) physical.push(["Spectral type", spectralType]);
+  if (!Number.isNaN(magnitude)) {
+    physical.push([`Apparent magnitude (${band})`, magnitude.toFixed(2)]);
+    physical.push([`Absolute magnitude (${band})`, stars.absoluteMagnitude[index].toFixed(2)]);
+  }
+  const data: Row[] = [["Source", "SIMBAD (CDS)"], ["Parallax", `${stars.parallaxes[index].toFixed(2)} mas`]];
+  if (stars.iauNames[index]) data.push(["Designation", stars.designations[index]], ["Name", "IAU (WGSN)"]);
+  return [{ rows }, { title: "Star", rows: physical }, { title: "Data", rows: data }];
 }
 
 function describeBody(body: Body, world: World, sunDistance: number, position: number[]): Section[] {
@@ -315,7 +364,10 @@ function formatKm(km: number): string {
 }
 
 function formatDistance(km: number): string {
-  return km < 0.01 * AU_KM ? formatKm(km) : `${(km / AU_KM).toFixed(3)} AU`;
+  if (km < 0.01 * AU_KM) return formatKm(km);
+  if (km < 0.05 * LIGHT_YEAR_KM) return `${(km / AU_KM).toFixed(km < 100 * AU_KM ? 3 : 0)} AU`;
+  const ly = km / LIGHT_YEAR_KM;
+  return `${ly < 100 ? ly.toFixed(2) : Math.round(ly).toLocaleString()} light-years`;
 }
 
 function formatDuration(days: number): string {

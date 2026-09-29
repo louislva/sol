@@ -4,8 +4,13 @@
  * A body's heliocentric position is its motion relative to its parent plus
  * the parent's heliocentric position, resolved recursively. Positions at the
  * current simulation time are memoized in a flat typed array for the frame.
+ *
+ * Motion about the Sun far beyond the planets turns into the Galactic plane
+ * (astro/galactic `twist`), so spacecraft leaving the solar system meet the
+ * stars where the map shows them.
  */
 
+import { twist } from "../astro/galactic";
 import { conicPosition } from "../astro/kepler";
 import { bodyFixedToEcliptic } from "../astro/orientation";
 import { type Body, type Motion, segmentAt, seriesIndex } from "./body";
@@ -61,6 +66,7 @@ export class Ephemeris {
       pz = this.positions[parentOffset + 2];
     }
     evaluateMotion(segment.motion, t, this.scratch);
+    if (segment.parent?.kind === "star") twist(this.scratch);
     this.positions[offset] = px + this.scratch[0];
     this.positions[offset + 1] = py + this.scratch[1];
     this.positions[offset + 2] = pz + this.scratch[2];
@@ -80,6 +86,7 @@ export class Ephemeris {
   positionAt(body: Body, t: number, out: Float64Array | number[]): void {
     const segment = segmentAt(body, t);
     evaluateMotion(segment.motion, t, out);
+    if (segment.parent?.kind === "star") twist(out);
     const step = this.scratch;
     for (let parent = segment.parent; parent; ) {
       const parentSegment = segmentAt(parent, t);

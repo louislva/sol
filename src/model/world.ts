@@ -6,20 +6,25 @@
 import { type Body, existsAt, parentAt } from "./body";
 import { Catalog } from "./catalog";
 import { Ephemeris } from "./ephemeris";
+import { type GalaxyModel, galacticCenterAt } from "../astro/galactic";
+import galaxyData from "../data/galaxy.json";
 import type { AsteroidPopulation } from "./asteroidPopulation";
 import type { SatellitePopulation } from "./satellitePopulation";
+import type { StarPopulation } from "./starPopulation";
 
 /** Anything that can be hovered, selected, or followed. */
 export type Target =
   | { type: "body"; body: Body }
   | { type: "asteroid"; index: number }
-  | { type: "satellite"; index: number };
+  | { type: "satellite"; index: number }
+  | { type: "star"; index: number };
 
 export function sameTarget(a: Target | null, b: Target | null): boolean {
   if (!a || !b) return a === b;
   if (a.type === "body" && b.type === "body") return a.body === b.body;
   if (a.type === "asteroid" && b.type === "asteroid") return a.index === b.index;
   if (a.type === "satellite" && b.type === "satellite") return a.index === b.index;
+  if (a.type === "star" && b.type === "star") return a.index === b.index;
   return false;
 }
 
@@ -30,6 +35,9 @@ export class World {
   readonly earth: Body;
   asteroids: AsteroidPopulation | null = null;
   satellites: SatellitePopulation | null = null;
+  stars: StarPopulation | null = null;
+  /** The Milky Way's structure and the Sun's motion in it (Reid et al. 2019). */
+  readonly galaxy: GalaxyModel = galaxyData;
   private readonly scratch = new Float64Array(3);
 
   constructor() {
@@ -70,6 +78,9 @@ export class World {
         out[1] = this.scratch[1] + this.ephemeris.y(this.earth);
         return;
       }
+      case "star":
+        this.stars!.positionAt(target.index, t, out);
+        return;
     }
   }
 
@@ -92,7 +103,15 @@ export class World {
         out[2] = this.scratch[2] + earth[2];
         return;
       }
+      case "star":
+        this.stars!.positionAt(target.index, t, out);
+        return;
     }
+  }
+
+  /** The Galactic center relative to the Sun (km, display frame) at the current time. */
+  galacticCenter(out: Float64Array | number[]): void {
+    galacticCenterAt(this.galaxy, this.time, out);
   }
 
   name(target: Target): string {
@@ -100,11 +119,14 @@ export class World {
       case "body": return target.body.name;
       case "asteroid": return this.asteroids?.names[target.index] ?? "Asteroid";
       case "satellite": return this.satellites?.names[target.index] ?? "Satellite";
+      case "star": return this.stars?.names[target.index] ?? "Star";
     }
   }
 
   exists(target: Target): boolean {
-    return target.type !== "body" || existsAt(target.body, this.time);
+    if (target.type === "body") return existsAt(target.body, this.time);
+    if (target.type === "satellite") return this.satellites?.validAt(this.time) ?? false;
+    return true;
   }
 
   /** The body a target orbits right now. */
@@ -113,6 +135,7 @@ export class World {
       case "body": return parentAt(target.body, this.time);
       case "asteroid": return this.sun;
       case "satellite": return this.earth;
+      case "star": return null;
     }
   }
 
@@ -123,6 +146,11 @@ export class World {
     const needle = query.trim().toLowerCase();
     const satelliteIndex = this.satellites?.names.findIndex((name) => name.toLowerCase() === needle) ?? -1;
     if (satelliteIndex >= 0) return { type: "satellite", index: satelliteIndex };
+    const stars = this.stars;
+    const starIndex = stars ? stars.names.findIndex((name, index) => (
+      name.toLowerCase() === needle || stars.designations[index].toLowerCase() === needle
+    )) : -1;
+    if (starIndex >= 0) return { type: "star", index: starIndex };
     const asteroidIndex = this.asteroids?.names.findIndex((name) => {
       const lower = name.toLowerCase();
       return lower === needle || lower.replace(/^\d+\s+/, "") === needle;
@@ -138,6 +166,11 @@ export class World {
     for (const body of this.catalog.bodies) {
       if (body.kind !== "barycenter" && body.name.toLowerCase().includes(needle)) results.push({ type: "body", body });
     }
+    this.stars?.names.forEach((name, index) => {
+      if (name.toLowerCase().includes(needle) || this.stars!.designations[index].toLowerCase().includes(needle)) {
+        results.push({ type: "star", index });
+      }
+    });
     this.satellites?.names.forEach((name, index) => {
       if (name.toLowerCase().includes(needle)) results.push({ type: "satellite", index });
     });

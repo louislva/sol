@@ -21,10 +21,10 @@ const STEPS: Array<[number, string, number]> = (() => {
     [60, "light-min", [2, 3, 5, 10, 15, 20, 30, 45, 60, 90]],
     [3600, "light-hr", [2, 3, 5, 10, 15, 20]],
     [86_400, "light-day", [2, 3, 5, 10, 20, 50, 100, 200]],
-    [86_400 * 365.25, "light-yr", [1, 2, 5]],
+    [86_400 * 365.25, "light-yr", [1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000, 10_000, 20_000, 30_000, 50_000]],
   ];
   for (const [seconds, unit, counts] of lightUnits) {
-    for (const count of counts) steps.push([count * seconds * LIGHT_SECOND_KM, pluralize(count, unit), 0]);
+    for (const count of counts) steps.push([count * seconds * LIGHT_SECOND_KM, pluralize(count, unit).replace(/^(\d{4,})/, (n) => Number(n).toLocaleString("en-US")), 0]);
   }
   for (const au of [1, 1.5, 2, 3, 5, 7.5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000]) {
     steps.push([au * AU_KM, `${au} AU`, 1]);

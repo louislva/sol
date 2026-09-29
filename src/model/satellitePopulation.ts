@@ -92,6 +92,13 @@ export class SatellitePopulation {
   private readonly basis: Float64Array;
   private readonly basisTime: Float64Array;
   private readonly orientationRate: Float64Array;
+  /**
+   * The span the elements describe (JD): within a year of their epochs.
+   * Further out, satellites had not launched yet, or have long since moved
+   * off these orbits or reentered.
+   */
+  readonly validFrom: number;
+  readonly validTo: number;
   private lastUpdate = Number.NaN;
   private frameCount = 0;
 
@@ -156,12 +163,24 @@ export class SatellitePopulation {
       this.orientationRate[index] = Math.abs(this.nodeRate[index]) + Math.abs(this.argPeriRate[index]);
       this.speed[index] = n * a * Math.sqrt((1 + e) / (1 - e));
     });
+    let earliest = Number.POSITIVE_INFINITY;
+    let latest = Number.NEGATIVE_INFINITY;
+    for (const epoch of this.epoch) {
+      earliest = Math.min(earliest, epoch);
+      latest = Math.max(latest, epoch);
+    }
+    this.validFrom = earliest - 365.25;
+    this.validTo = latest + 365.25;
   }
 
   static async load(): Promise<SatellitePopulation> {
     const response = await fetch("/data/satellites.json");
     if (!response.ok) throw new Error(`satellites.json: HTTP ${response.status}`);
     return new SatellitePopulation(await response.json() as SatelliteFile);
+  }
+
+  validAt(t: number): boolean {
+    return t >= this.validFrom && t <= this.validTo;
   }
 
   colorOf(index: number): string {

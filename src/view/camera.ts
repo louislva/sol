@@ -10,7 +10,7 @@
  * the new origin, so the picture never jumps.
  */
 
-import { AU_KM } from "../astro/constants";
+import { LIGHT_YEAR_KM } from "../astro/galactic";
 
 /** Pinned point for zooming: stays under the same screen position. */
 interface ZoomAnchor {
@@ -23,8 +23,8 @@ interface ZoomAnchor {
 
 const ZOOM_TIME_CONSTANT_MS = 70;
 const MAX_ZOOM = 5_000; // px/km: 0.2 m per pixel, enough for the smallest asteroid targets
-/** Farthest view: this many AU from the center to the nearest viewport edge. */
-const MIN_ZOOM_VIEW_RADIUS_AU = 400;
+/** Farthest view: from the center to the nearest viewport edge, the whole Galaxy. */
+const MIN_ZOOM_VIEW_RADIUS_KM = 60_000 * LIGHT_YEAR_KM;
 
 export class Camera {
   width = 1;
@@ -57,7 +57,7 @@ export class Camera {
   }
 
   get minZoom(): number {
-    return Math.min(this.width, this.height) / 2 / (MIN_ZOOM_VIEW_RADIUS_AU * AU_KM);
+    return Math.min(this.width, this.height) / 2 / MIN_ZOOM_VIEW_RADIUS_KM;
   }
 
   get maxZoom(): number {

@@ -13,6 +13,7 @@ Top-down solar system visualization. Clean, elegant, geometric like Mini Metro. 
 - NASA JPL Horizons / Small-Body Database
 - Minor Planet Center
 - IAU official sources
+- For stars and the Galaxy: SIMBAD (CDS), the IAU WGSN, and peer-reviewed papers
 
 If data is not available, either:
 1. Write a fetch script to get real data
@@ -45,6 +46,7 @@ src/
 ├── astro/                    # Pure math, no app state
 │   ├── constants.ts          # Units, epochs, time scales (UTC ↔ TDB)
 │   ├── rotation.ts           # Frame rotations (ICRF, ecliptic, pole frames)
+│   ├── galactic.ts           # Galactic frame, the display twist, star states, spiral arms
 │   └── kepler.ts             # KeplerOrbit: 3D conics with secular drift, path sampling
 ├── model/                    # What exists and where it is
 │   ├── body.ts               # Body, Motion, MotionSegment (the time-segmented model)
@@ -53,18 +55,19 @@ src/
 │   ├── world.ts              # Catalog + ephemeris + populations; Target type
 │   ├── clock.ts              # Simulation time and speed modes
 │   ├── asteroidPopulation.ts # 25k asteroids, structure-of-arrays
-│   └── satellitePopulation.ts# All active Earth satellites, J2 drift
+│   ├── satellitePopulation.ts# All active Earth satellites, J2 drift
+│   └── starPopulation.ts     # ~11k stars moving at their measured space velocities
 ├── view/
 │   ├── camera.ts             # Camera in a moving reference frame
 │   ├── referenceFrame.ts     # Automatic reference-frame choice
 │   ├── input.ts              # Pointer/wheel/touch/gesture → intents
 │   ├── renderer.ts           # Frame composition, projection, occlusion
 │   ├── picking.ts            # Hit testing against what was drawn
-│   └── layers/               # orbits, rings, labels, icons, populations, scale bar
+│   └── layers/               # galaxy, stars, orbits, rings, labels, icons, populations, scale bar
 ├── ui/                       # Controls, info sidebar, console API, Wikipedia
 └── data/                     # Generated JSON (+ palette.ts); see scripts/README.md
 scripts/                      # Data fetchers (Node ≥ 22.18 runs .ts directly)
-public/data/                  # Large datasets loaded at runtime (asteroids, satellites)
+public/data/                  # Large datasets loaded at runtime (asteroids, satellites, stars, missions)
 ```
 
 ## Key Design Decisions
@@ -84,6 +87,18 @@ Earth–Moon barycenter). Planets switch JPL element tables at 1800/2050 this
 way. A spacecraft can be modeled as launch → cruise → orbit/landing segments
 with different parents. `existsFrom`/`existsUntil` bound when a body is in
 the scene.
+
+### Beyond the solar system
+Zooming out continues past the planets to the stars and the whole Milky Way.
+The ecliptic and the Galactic plane are 60° apart, and both are drawn
+top-down: positions about the Sun beyond 1,000 AU turn smoothly (by distance)
+into the Galactic plane, fully so beyond 60,000 AU (`astro/galactic.ts`
+`twist`). Distances from the Sun are kept, and stars and far-out spacecraft
+share one frame, so Voyager meets its stars where the map shows them. Stars
+are drawn within a slab around the height of whatever is framed. The clock
+spans ±250,000 years; outside 3000 BC – 3000 AD the planets' positions are
+extrapolations (the status line says so), and Earth satellites show only
+near their element epochs.
 
 ### Reference frames
 The camera stores its center as an offset from a frame body that moves with
@@ -136,7 +151,7 @@ The app exposes a `window.sol` object for programmatic control via the browser c
 
 ### Navigation
 ```js
-sol.goto("Earth")          // Center camera on a body (auto-zooms by type)
+sol.goto("Earth")          // Center camera on a body or star (auto-zooms by type)
 sol.follow("ISS (ZARYA)")  // Lock the camera frame to an object
 sol.unfollow()             // Back to the automatic reference frame
 sol.watch("Voyager 2")     // Rewind to a mission's launch and follow it
@@ -156,6 +171,7 @@ sol.setTimeScale(86400)    // Set exact time scale (simulated sec per real sec; 
 sol.pause()                // Pause time
 sol.resume()               // Resume forward with auto speed
 sol.reverse()              // Flip the direction of time
+sol.setDate("40000-01-01") // Deep time works too (±250,000 years)
 sol.getDate()              // Get current simulation date string
 ```
 
@@ -177,4 +193,5 @@ sol.deselect()             // Clear selection
 ## Data Sources
 See `scripts/README.md`. In short: NAIF PCK/GM kernels, JPL approximate
 planet elements, JPL Horizons (moons, small bodies, spacecraft), JPL SBDB
-(asteroids), CelesTrak (Earth satellites).
+(asteroids), CelesTrak (Earth satellites), SIMBAD and the IAU WGSN (stars),
+Reid et al. 2019 (the Galaxy's spiral arms and the Sun's motion).

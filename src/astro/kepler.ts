@@ -7,7 +7,10 @@
  */
 
 import { DAYS_PER_CENTURY, J2000, TWO_PI, wrapAngle } from "./constants";
+import { twist } from "./galactic";
 import { IDENTITY, type Mat3 } from "./rotation";
+
+const pathScratch = new Float64Array(3);
 
 export interface SecularRates {
   /** Rates per day; angles in radians, a in km. */
@@ -298,14 +301,20 @@ export class KeplerOrbit {
    * Closed orbits: `count` points around the full ellipse (the path closes
    * implicitly). Open orbits: `count` points over [fromAnomaly, toAnomaly].
    */
+  /**
+   * @param aboutSun the orbit is about the Sun, so points far out take the
+   *   display's turn into the Galactic plane (see astro/galactic)
+   */
   samplePath(
     t: number,
     count: number,
     out: Float64Array,
     fromAnomaly = -Math.PI,
-    toAnomaly = Math.PI
+    toAnomaly = Math.PI,
+    aboutSun = false
   ): void {
     const { a, e, b, P, Q } = this.shapeAt(t);
+    const point = pathScratch;
     const closed = e < 1;
     const step = closed ? TWO_PI / count : (toAnomaly - fromAnomaly) / (count - 1);
     for (let index = 0; index < count; index++) {
@@ -319,8 +328,14 @@ export class KeplerOrbit {
         x = -a * (e - Math.cosh(anomaly));
         y = b * Math.sinh(anomaly);
       }
-      out[index * 2] = P[0] * x + Q[0] * y;
-      out[index * 2 + 1] = P[1] * x + Q[1] * y;
+      point[0] = P[0] * x + Q[0] * y;
+      point[1] = P[1] * x + Q[1] * y;
+      if (aboutSun) {
+        point[2] = P[2] * x + Q[2] * y;
+        twist(point);
+      }
+      out[index * 2] = point[0];
+      out[index * 2 + 1] = point[1];
     }
   }
 }

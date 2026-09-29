@@ -1,13 +1,16 @@
 /**
- * Draws one frame: asteroid cloud, orbits, bodies and
- * rings, satellites, labels, and the scale bar — and records what was drawn
- * for hit testing.
+ * Draws one frame: the Galaxy and the stars, the asteroid cloud, orbits,
+ * bodies and rings, satellites, labels, and the scale bar — and records what
+ * was drawn for hit testing.
  */
 
+import { AU_KM } from "../astro/constants";
+import { LIGHT_YEAR_KM } from "../astro/galactic";
 import { bodyFixedToEcliptic } from "../astro/orientation";
 import { type Body, type BodyKind, existsAt, orbitAt, segmentAt, visibleParentAt } from "../model/body";
 import { sameTarget, type Target, type World } from "../model/world";
 import type { Camera } from "./camera";
+import { GalaxyLayer } from "./layers/galaxy";
 import { drawSpacecraftIcon, drawStickFigure } from "./layers/icons";
 import { LabelLayer } from "./layers/labels";
 import { OrbitLayer } from "./layers/orbits";
@@ -18,6 +21,7 @@ import {
 } from "./layers/populations";
 import { RingRenderer } from "./layers/rings";
 import { drawScaleBar } from "./layers/scaleBar";
+import { StarLayer } from "./layers/stars";
 import { TrailLayer } from "./layers/trails";
 import { PickBuffer } from "./picking";
 import { profiler } from "./profiler";
@@ -55,6 +59,15 @@ const FIGURE_MIN_BODY_PX = 30;
 /** Discs larger than this (px) are drawn as the part that crosses the viewport. */
 const LARGE_DISC_PX = 20_000;
 const SOL_FADE_MS = 300;
+/**
+ * Far out, the Sun shrinks from its 20 px minimum toward a star's dot: it
+ * starts below the zoom at which 2,000 AU spans 500 px, as the square root
+ * of the zoom.
+ */
+const SUN_SHRINK_ZOOM = 500 / (2_000 * AU_KM);
+const SUN_FAR_RADIUS_PX = 2.5;
+/** The Galaxy's arms fade in between these view radii. */
+const GALAXY_FADE = [1_500 * LIGHT_YEAR_KM, 6_000 * LIGHT_YEAR_KM];
 
 export interface ViewState {
   hovered: Target | null;
@@ -73,6 +86,8 @@ export class Renderer {
   private readonly rings = new RingRenderer();
   private readonly labels = new LabelLayer();
   private readonly trails = new TrailLayer();
+  private readonly galaxy = new GalaxyLayer();
+  private readonly stars = new StarLayer();
   private readonly brightened = new Map<string, string>();
   private readonly bodyTargets: Target[];
 
@@ -83,6 +98,7 @@ export class Renderer {
   private readonly opacity: Float32Array;
   private readonly projected: Uint8Array;
 
+  private readonly frameScratch = new Float64Array(3);
   private solLabelOpacity = 1;
   private lastFrameMs = performance.now();
 
@@ -112,6 +128,18 @@ export class Renderer {
     this.orbits.beginFrame();
     profiler.measure("project", () => this.project(world, camera, state));
 
+    const galaxyAlpha = fade(camera.viewRadius, GALAXY_FADE[0], GALAXY_FADE[1]);
+    if (galaxyAlpha > 0) profiler.measure("galaxy", () => this.galaxy.draw(ctx, world, camera, this.labels, galaxyAlpha));
+    if (world.stars && this.viewReachesStars(world, camera)) {
+      const stars = world.stars;
+      const highlight = [state.hovered, state.selected].find((target) => target?.type === "star");
+      world.positionAt(state.followed ?? state.trailFrame, world.time, this.frameScratch);
+      const sliceZ = this.frameScratch[2];
+      profiler.measure("stars", () => this.stars.draw(
+        ctx, stars, camera, world.time, this.picks, this.labels, sliceZ, highlight?.type === "star" ? highlight.index : -1, 1
+      ));
+    }
+
     if (world.asteroids) {
       const asteroids = world.asteroids;
       profiler.measure("asteroids", () => drawAsteroids(ctx, asteroids, camera, world.time, this.picks));
@@ -121,6 +149,7 @@ export class Renderer {
 
     const earth = world.earth;
     const showSatellites = world.satellites !== null
+      && world.satellites.validAt(world.time)
       && this.projected[earth.index] === 1
       && satelliteDetailVisible(camera);
     profiler.measure("bodies", () => this.drawBodies(world, camera, state, frameMs));
@@ -160,11 +189,12 @@ export class Renderer {
       if (body.kind === "barycenter" || !state.isShown(body) || !existsAt(body, t)) continue;
 
       const parent = visibleParentAt(body, t);
-      const parentShown = parent !== null && this.projected[parent.index] === 1;
+      // A body is never more visible than its parent: the moons (and
+      // orbiters) of a planet hidden in the Sun's disc, or skipped as too
+      // small to matter, are hidden too. Parents come before children.
+      if (parent && (!this.projected[parent.index] || this.opacity[parent.index] === 0)) continue;
+      const parentShown = parent !== null;
       const parentRadius = parentShown ? this.radiusPx[parent.index] : 0;
-      // A body is never more visible than its parent: the moons of a planet
-      // hidden in the Sun's disc are hidden too.
-      if (parentShown && this.opacity[parent.index] === 0) continue;
 
       // Level of detail: a satellite system entirely inside its parent's
       // disc, or entirely off screen, needs no propagation at all.
@@ -181,7 +211,7 @@ export class Renderer {
       const offset = eph.resolve(body);
       const x = camera.worldToScreenX(eph.positions[offset]);
       const y = camera.worldToScreenY(eph.positions[offset + 1]);
-      const radius = Math.max((body.radius ?? 0) * zoom, MIN_RADIUS_PX[body.kind]);
+      const radius = Math.max((body.radius ?? 0) * zoom, minRadiusPx(body.kind, zoom));
       this.screenX[index] = x;
       this.screenY[index] = y;
       this.radiusPx[index] = radius;
@@ -360,6 +390,14 @@ export class Renderer {
     return Math.max(0, Math.min(1, (gap - LABEL_FADE_END_PX) / (LABEL_FADE_START_PX - LABEL_FADE_END_PX)));
   }
 
+  /** Could any star be in view? The nearest is light-years away; skip them all until then. */
+  private viewReachesStars(world: World, camera: Camera): boolean {
+    const stars = world.stars!;
+    stars.update(world.time);
+    const farthest = Math.hypot(camera.centerX, camera.centerY) + camera.viewRadius;
+    return farthest >= stars.nearestDistance;
+  }
+
   /** Labels for a hovered or selected asteroid or satellite. */
   private addPopulationLabels(world: World, camera: Camera, state: ViewState): void {
     const position = [0, 0, 0];
@@ -408,6 +446,18 @@ export class Renderer {
     }
     return result;
   }
+}
+
+/** Smallest on-screen radius for a body of this kind at this zoom. */
+function minRadiusPx(kind: BodyKind, zoom: number): number {
+  const base = MIN_RADIUS_PX[kind];
+  if (kind !== "star" || zoom >= SUN_SHRINK_ZOOM) return base;
+  return Math.max(SUN_FAR_RADIUS_PX, base * Math.sqrt(zoom / SUN_SHRINK_ZOOM));
+}
+
+/** 0 below `from`, 1 above `to`, linear in log space between. */
+function fade(value: number, from: number, to: number): number {
+  return Math.max(0, Math.min(1, Math.log(value / from) / Math.log(to / from)));
 }
 
 /**

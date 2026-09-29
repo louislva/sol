@@ -10,6 +10,9 @@ const BODY_MIN_HIT_PX = 8;
 const DOT_HIT_PX = 6;
 const ORBIT_HIT_PX = 6;
 
+const DOT_KINDS = ["asteroid", "satellite", "star"] as const;
+type DotKind = (typeof DOT_KINDS)[number];
+
 export interface PickResult {
   target: Target;
   /** True when the pointer is on the object itself rather than its orbit. */
@@ -20,7 +23,7 @@ export class PickBuffer {
   private bodies: Array<{ target: Target; x: number; y: number; radius: number }> = [];
   // Point populations: parallel typed arrays reused across frames.
   private dotCount = 0;
-  private dotIsSatellite = new Uint8Array(1024);
+  private dotKind = new Uint8Array(1024);
   private dotIndices = new Uint32Array(1024);
   private dotX = new Float32Array(1024);
   private dotY = new Float32Array(1024);
@@ -35,10 +38,10 @@ export class PickBuffer {
     this.bodies.push({ target, x, y, radius: Math.max(radius, BODY_MIN_HIT_PX) });
   }
 
-  addDot(kind: "asteroid" | "satellite", index: number, x: number, y: number): void {
+  addDot(kind: DotKind, index: number, x: number, y: number): void {
     if (this.dotCount === this.dotX.length) this.growDots();
     const slot = this.dotCount++;
-    this.dotIsSatellite[slot] = kind === "satellite" ? 1 : 0;
+    this.dotKind[slot] = DOT_KINDS.indexOf(kind);
     this.dotIndices[slot] = index;
     this.dotX[slot] = x;
     this.dotY[slot] = y;
@@ -51,7 +54,7 @@ export class PickBuffer {
       next.set(array);
       return next;
     };
-    this.dotIsSatellite = grow(this.dotIsSatellite, (size) => new Uint8Array(size));
+    this.dotKind = grow(this.dotKind, (size) => new Uint8Array(size));
     this.dotIndices = grow(this.dotIndices, (size) => new Uint32Array(size));
     this.dotX = grow(this.dotX, (size) => new Float32Array(size));
     this.dotY = grow(this.dotY, (size) => new Float32Array(size));
@@ -86,8 +89,7 @@ export class PickBuffer {
       }
     }
     if (bestDot >= 0) {
-      const type = this.dotIsSatellite[bestDot] ? "satellite" : "asteroid";
-      return { target: { type, index: this.dotIndices[bestDot] }, direct: true };
+      return { target: { type: DOT_KINDS[this.dotKind[bestDot]], index: this.dotIndices[bestDot] }, direct: true };
     }
 
     let bestOrbit: DrawnOrbit | null = null;

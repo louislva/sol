@@ -66,3 +66,28 @@ export const SATELLITE_CATEGORY_COLORS = {
   GEO: "#66ff66",
   OTHER: "#ffff66",
 } as const;
+
+/**
+ * Star colors by spectral class: the apparent colors of blackbodies at each
+ * class's typical temperature (after Mitchell Charity, "What color are the
+ * stars?"), with brown dwarfs (L, T, Y) a deepening red and white dwarfs (D)
+ * blue-white.
+ */
+export const STAR_CLASS_COLORS: Record<string, string> = {
+  O: "#9bb0ff",
+  B: "#aabfff",
+  A: "#cad7ff",
+  F: "#f8f7ff",
+  G: "#fff4ea",
+  K: "#ffd2a1",
+  M: "#ffb56c",
+  L: "#ff8a4c",
+  T: "#e0603c",
+  Y: "#b8402c",
+  D: "#dfe6ff",
+};
+export const DEFAULT_STAR_COLOR = "#dddddd";
+
+/** The Milky Way's spiral arms and center. */
+export const GALAXY_ARM_COLOR = "#8fa6d8";
+export const GALACTIC_CENTER_COLOR = "#ffd9a0";

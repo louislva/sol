@@ -6,12 +6,14 @@
  * possibly switch reference frame → draw → update hover and the UI.
  */
 
-import { AU_KM, julianToDate } from "./astro/constants";
+import { AU_KM, J2000, julianToDate } from "./astro/constants";
+import { LIGHT_YEAR_KM } from "./astro/galactic";
 import { type Body, type MoonCategory, orbitAt, segmentAt } from "./model/body";
-import { Clock, type SpeedMode } from "./model/clock";
+import { AUTO_SPEED_MAX, Clock, DEEP_TIME_YEARS, type SpeedMode } from "./model/clock";
 import { AsteroidPopulation } from "./model/asteroidPopulation";
 import type { EphemerisFile, EphemerisSeries, MissionFile } from "./model/catalog";
 import { SatellitePopulation } from "./model/satellitePopulation";
+import { StarPopulation } from "./model/starPopulation";
 import { sameTarget, type Target, World } from "./model/world";
 import { Controls } from "./ui/controls";
 import { Sidebar } from "./ui/sidebar";
@@ -31,7 +33,7 @@ const MAX_PIXEL_RATIO = 2;
 /** While following, auto speed moves the object about this fast on screen. */
 const FOLLOW_PACE_PX_PER_SECOND = 40;
 /** Fastest auto speed (simulated seconds per second): five years per second. */
-const MAX_AUTO_RATE = 5 * 31_557_600;
+const MAX_AUTO_RATE = AUTO_SPEED_MAX;
 const MAX_TRAJECTORY_LOADS = 3;
 
 export class App {
@@ -82,7 +84,7 @@ export class App {
       toggleFollow: (target) => (sameTarget(this.followed, target) ? this.unfollow() : this.follow(target)),
       watchFromLaunch: (body) => void this.watchFromLaunch(body),
     });
-    this.clock.bounds = this.world.catalog.validSpan;
+    this.clock.bounds = [J2000 - DEEP_TIME_YEARS * 365.25, J2000 + DEEP_TIME_YEARS * 365.25];
     this.controls = new Controls({
       shuttle: (direction) => this.clock.shuttle(direction),
       togglePause: () => this.togglePause(),
@@ -219,7 +221,10 @@ export class App {
 
   private refreshUi(): void {
     const frameName = this.world.name(this.frameTarget);
+    const [validFrom, validTo] = this.world.catalog.validSpan;
+    const t = this.world.time;
     const status = [
+      ...(t < validFrom || t > validTo ? ["planets extrapolated"] : []),
       `${this.followed ? "following" : "frame"} ${frameName}`,
       `zoom ${this.camera.zoom.toExponential(1)}`,
     ].join(" · ");
@@ -416,6 +421,7 @@ export class App {
   private viewRadiusFor(target: Target): number {
     if (target.type === "satellite") return 3_000;
     if (target.type === "asteroid") return 0.05 * AU_KM;
+    if (target.type === "star") return 0.5 * LIGHT_YEAR_KM;
     const body = target.body;
     if (body.kind === "star") return 1.5 * AU_KM;
     if (body.kind === "spacecraft") {
@@ -553,5 +559,11 @@ export class App {
         console.log(`Loaded ${population.count.toLocaleString()} satellites, ${population.constellations.length} constellations`);
       })
       .catch((error: unknown) => console.error("Satellite catalog failed to load:", error));
+    StarPopulation.load()
+      .then((population) => {
+        this.world.stars = population;
+        console.log(`Loaded ${population.count.toLocaleString()} stars`);
+      })
+      .catch((error: unknown) => console.error("Star catalog failed to load:", error));
   }
 }

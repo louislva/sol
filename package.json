@@ -17,7 +17,9 @@
     "data:spacecraft": "node scripts/fetch-spacecraft.ts",
     "data:missions": "node scripts/fetch-missions.ts",
     "data:satellites": "node scripts/fetch-satellites.ts",
-    "data:all": "npm run data:orientation && npm run data:planets && npm run data:moons && npm run data:small-bodies && npm run data:ephemerides && npm run data:asteroids && npm run data:spacecraft && npm run data:missions && npm run data:satellites",
+    "data:stars": "node scripts/fetch-stars.ts",
+    "data:galaxy": "node scripts/fetch-galaxy.ts",
+    "data:all": "npm run data:orientation && npm run data:planets && npm run data:moons && npm run data:small-bodies && npm run data:ephemerides && npm run data:asteroids && npm run data:spacecraft && npm run data:missions && npm run data:satellites && npm run data:stars && npm run data:galaxy",
     "verify": "node scripts/verify-positions.ts"
   },
   "devDependencies": {

@@ -105,6 +105,7 @@ interface MissionIndexEntry {
   fate?: string;
   start: number;
   end: number | null;
+  escapes?: boolean;
   landing: Landing | null;
   file: string;
 }
@@ -526,7 +527,7 @@ export class Catalog {
         // A lander known only by its site appears once it has landed; the
         // full trajectory extends this back to launch.
         existsFrom: conic ? launch : mission!.landing!.time,
-        existsUntil: end ?? Number.POSITIVE_INFINITY,
+        existsUntil: mission?.escapes ? Number.POSITIVE_INFINITY : end ?? Number.POSITIVE_INFINITY,
         mission: {
           spkid: mission?.spkid ?? conic!.spkid,
           type: (mission?.type ?? conic!.missionType) as MissionInfo["type"],
@@ -538,6 +539,7 @@ export class Catalog {
           fate: mission?.fate,
           landing: mission?.landing ?? undefined,
           trajectoryFile: mission?.file,
+          escapes: mission?.escapes,
         },
         naifId: mission?.spkid ?? conic!.spkid,
         dataSource: mission ? "JPL Horizons trajectory" : "JPL Horizons osculating elements",
@@ -581,6 +583,12 @@ export class Catalog {
     }
     if (file.landing) segments.push(this.surfaceSegment(file.landing));
     if (segments.length === 0) return;
+    const last = segments[segments.length - 1];
+    if (body.mission?.escapes && last.motion.kind === "keplerSeries") {
+      // Coast on the last osculating hyperbola beyond the end of the data.
+      const orbits = last.motion.orbits;
+      segments.push({ start: last.end, end: Number.POSITIVE_INFINITY, parent: last.parent, motion: { kind: "kepler", orbit: orbits[orbits.length - 1] } });
+    }
     body.segments = segments;
     body.existsFrom = segments[0].start;
     for (const segment of segments) {

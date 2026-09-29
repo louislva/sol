@@ -182,5 +182,7 @@ export function formatRate(secondsPerSecond: number): string {
   if (rate < 86_400) return `${sign}${(rate / 3600).toFixed(1)} hr/s`;
   if (rate < 86_400 * 30) return `${sign}${(rate / 86_400).toFixed(1)} day/s`;
   if (rate < 86_400 * 365.25) return `${sign}${(rate / (86_400 * 30.44)).toFixed(1)} mo/s`;
-  return `${sign}${(rate / (86_400 * 365.25)).toFixed(1)} yr/s`;
+  const years = rate / (86_400 * 365.25);
+  if (years < 1000) return `${sign}${years.toFixed(years < 100 ? 1 : 0)} yr/s`;
+  return `${sign}${(years / 1000).toFixed(years < 10_000 ? 1 : 0)}k yr/s`;
 }

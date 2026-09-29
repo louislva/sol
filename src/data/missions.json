@@ -1,6 +1,6 @@
 {
   "source": "JPL Horizons",
-  "generatedAt": "2026-09-29T13:38:07.444Z",
+  "generatedAt": "2026-09-29T20:39:24.493Z",
   "missions": [
     {
       "name": "Voyager 1",
@@ -11,6 +11,7 @@
       "start": 2443392.0833333335,
       "end": null,
       "finalParent": "Sun",
+      "escapes": true,
       "landing": null,
       "file": "data/missions/voyager-1.json"
     },
@@ -23,6 +24,7 @@
       "start": 2443376.1479166667,
       "end": null,
       "finalParent": "Sun",
+      "escapes": true,
       "landing": null,
       "file": "data/missions/voyager-2.json"
     },
@@ -36,6 +38,7 @@
       "start": 2441379.5868055555,
       "end": 2469807.50625,
       "finalParent": "Sun",
+      "escapes": true,
       "landing": null,
       "file": "data/missions/pioneer-10.json"
     },
@@ -49,6 +52,7 @@
       "start": 2441778.601388889,
       "end": 2469807.50625,
       "finalParent": "Sun",
+      "escapes": true,
       "landing": null,
       "file": "data/missions/pioneer-11.json"
     },
@@ -61,6 +65,7 @@
       "start": 2453755.327777778,
       "end": 2469807.4993055556,
       "finalParent": "Sun",
+      "escapes": true,
       "landing": null,
       "file": "data/missions/new-horizons.json"
     },

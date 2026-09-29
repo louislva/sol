@@ -85,7 +85,7 @@ export class OrbitLayer {
         points = this.localPath;
         closed = false;
       } else {
-        const cached = this.fullPath(body, orbit, t, radiusPx);
+        const cached = this.fullPath(body, orbit, t, radiusPx, segment.parent.kind === "star");
         points = cached.points;
         count = cached.count;
         closed = true;
@@ -128,7 +128,7 @@ export class OrbitLayer {
     return Math.hypot(farthestX, farthestY) >= innerPx;
   }
 
-  private fullPath(body: Body, orbit: KeplerOrbit, t: number, radiusPx: number): CachedPath {
+  private fullPath(body: Body, orbit: KeplerOrbit, t: number, radiusPx: number, aboutSun: boolean): CachedPath {
     const wanted = Math.min(
       MAX_FULL_POINTS,
       Math.max(MIN_POINTS, Math.ceil(Math.PI * Math.sqrt(radiusPx / (2 * CHORD_TOLERANCE_PX))))
@@ -142,7 +142,7 @@ export class OrbitLayer {
     }
 
     const points = cached && cached.points.length >= count * 2 ? cached.points : new Float64Array(count * 2);
-    orbit.samplePath(t, count, points);
+    orbit.samplePath(t, count, points, -Math.PI, Math.PI, aboutSun);
     const entry = { orbit, points, count, time: t, closed: true };
     this.cache.set(body, entry);
     return entry;
@@ -161,7 +161,7 @@ export class OrbitLayer {
     if (cached && cached.orbit === orbit && !cached.closed && Math.abs(t - cached.time) < 1) return cached;
 
     world.ephemeris.positionAt(body.orbitSource ?? body, t, this.scratch);
-    const parent = segmentAt(body, t).parent!;
+    const parent = segmentAt(body.orbitSource ?? body, t).parent!;
     const parentPosition = [0, 0, 0];
     world.ephemeris.positionAt(parent, t, parentPosition);
     const distance = Math.hypot(
@@ -176,7 +176,7 @@ export class OrbitLayer {
       : [-reach, reach];
 
     const points = cached?.points.length === count * 2 ? cached.points : new Float64Array(count * 2);
-    orbit.samplePath(t, count, points, from, to);
+    orbit.samplePath(t, count, points, from, to, parent.kind === "star");
     const entry = { orbit, points, count, time: t, closed: false };
     this.cache.set(body, entry);
     return entry;

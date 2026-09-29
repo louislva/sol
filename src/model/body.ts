@@ -98,6 +98,12 @@ export interface MissionInfo {
   landing?: { body: string; time: number; latitude: number; longitude: number };
   /** Full trajectory data, loaded at runtime (path under public/). */
   trajectoryFile?: string;
+  /**
+   * Leaves the solar system: after its trajectory data ends, it coasts on
+   * the final hyperbola about the Sun (galactic tides, which bend such paths
+   * over hundreds of thousands of years, are neglected).
+   */
+  escapes?: boolean;
 }
 
 export interface Body {

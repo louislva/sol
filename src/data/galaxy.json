@@ -1,0 +1,85 @@
+{
+  "source": "Reid et al. 2019, ApJ 885, 131 (arXiv:1910.03357): Table 2 and fit A5 of Table 3",
+  "generatedAt": "2026-09-29T20:43:59.324Z",
+  "note": "Distances kpc, angles deg, velocities km/s. Arm azimuths β from the Galactic center, 0 toward the Sun, increasing with Galactic rotation; width is the Gaussian 1σ at R_kink.",
+  "r0": 8.15,
+  "zSun": 0.0055,
+  "theta0": 236,
+  "solarMotion": {
+    "u": 10.6,
+    "v": 10.7,
+    "w": 7.6
+  },
+  "arms": [
+    {
+      "name": "3-kpc",
+      "betaMin": 15,
+      "betaMax": 18,
+      "betaKink": 15,
+      "rKink": 3.52,
+      "pitchInner": -4.2,
+      "pitchOuter": -4.2,
+      "width": 0.18
+    },
+    {
+      "name": "Norma",
+      "betaMin": 5,
+      "betaMax": 54,
+      "betaKink": 18,
+      "rKink": 4.46,
+      "pitchInner": -1,
+      "pitchOuter": 19.5,
+      "width": 0.14
+    },
+    {
+      "name": "Scutum-Centaurus",
+      "betaMin": 0,
+      "betaMax": 104,
+      "betaKink": 23,
+      "rKink": 4.91,
+      "pitchInner": 14.1,
+      "pitchOuter": 12.1,
+      "width": 0.23
+    },
+    {
+      "name": "Sagittarius-Carina",
+      "betaMin": 2,
+      "betaMax": 97,
+      "betaKink": 24,
+      "rKink": 6.04,
+      "pitchInner": 17.1,
+      "pitchOuter": 1,
+      "width": 0.27
+    },
+    {
+      "name": "Local",
+      "betaMin": -8,
+      "betaMax": 34,
+      "betaKink": 9,
+      "rKink": 8.26,
+      "pitchInner": 11.4,
+      "pitchOuter": 11.4,
+      "width": 0.31
+    },
+    {
+      "name": "Perseus",
+      "betaMin": -23,
+      "betaMax": 115,
+      "betaKink": 40,
+      "rKink": 8.87,
+      "pitchInner": 10.3,
+      "pitchOuter": 8.7,
+      "width": 0.35
+    },
+    {
+      "name": "Outer",
+      "betaMin": -16,
+      "betaMax": 71,
+      "betaKink": 18,
+      "rKink": 12.24,
+      "pitchInner": 3,
+      "pitchOuter": 9.4,
+      "width": 0.65
+    }
+  ]
+}

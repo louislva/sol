@@ -676,6 +676,10 @@ async function processMission(config: MissionConfig) {
     start,
     end: landing ? null : extendsToFuture ? null : end,
     finalParent: segments[segments.length - 1].parent,
+    // Leaves the solar system: the ephemeris ends on a hyperbola about the Sun.
+    escapes: !landing && !config.endsAt && segments[segments.length - 1].parent === "Sun"
+      && segments[segments.length - 1].motion === "keplerSeries"
+      && (segments[segments.length - 1].rows.at(-1) as number[])[1] > 1,
     landing,
     file,
   };

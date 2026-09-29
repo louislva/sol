@@ -34,7 +34,8 @@ const AUTO_SPEED_POINTS: Array<[number, number]> = [
   [1.2e-7, 31_536_000],
   [3.8e-12, 315_360_000_000],
 ];
-const AUTO_SPEED_MAX = 5 * 31_536_000;
+/** Fastest auto speed: a thousand years per second, for watching the stars drift. */
+export const AUTO_SPEED_MAX = 1_000 * 31_557_600;
 
 export function autoSpeedForZoom(zoom: number): number {
   const points = AUTO_SPEED_POINTS;
@@ -49,12 +50,21 @@ export function autoSpeedForZoom(zoom: number): number {
   return Math.min(AUTO_SPEED_MAX, Math.max(1, speed));
 }
 
-/** Manual speeds range over these magnitudes (simulated s per s): realtime to ten years per second. */
+const YEAR_SECONDS = 31_557_600;
+
+/** Manual speeds range over these magnitudes (simulated s per s): realtime to 100,000 years per second. */
 export const MIN_SPEED = 1;
-export const MAX_SPEED = 10 * 31_557_600;
+export const MAX_SPEED = 100_000 * YEAR_SECONDS;
 
 /** Speeds that fast-forward and rewind step through. */
-const SPEED_LADDER = [1, 60, 3_600, 86_400, 604_800, 2_629_800, 31_557_600, 315_576_000];
+const SPEED_LADDER = [1, 60, 3_600, 86_400, 604_800, 2_629_800, YEAR_SECONDS, 10, 100, 1_000, 10_000, 100_000]
+  .map((speed, index) => (index > 6 ? speed * YEAR_SECONDS : speed));
+
+/**
+ * Deep time: the stars' straight-line motion holds for a few hundred
+ * thousand years, and JavaScript dates reach ±270,000 years.
+ */
+export const DEEP_TIME_YEARS = 250_000;
 
 export class Clock {
   julianDate: number;
