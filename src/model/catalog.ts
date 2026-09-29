@@ -23,26 +23,35 @@ import moonDiscovery from "../data/moonDiscovery.json";
 import smallBodyData from "../data/smallBodies.json";
 import spacecraftData from "../data/spacecraft.json";
 import orientationData from "../data/orientation.json";
-import { type Body, type BodyKind, type Discovery, type MoonCategory, type Motion, type MotionSegment, type Orientation, orbitAt, segmentAt, spliceSegment } from "./body";
+import type { OrientationModel } from "../astro/orientation";
+import { type Body, type BodyKind, type Discovery, type MoonCategory, type Motion, type MotionSegment, orbitAt, segmentAt, spliceSegment } from "./body";
 
 
-type OrientationRecord = {
-  poleRa?: number[];
-  poleDec?: number[];
-  primeMeridian?: number[];
+type OrientationRecord = Partial<Omit<OrientationModel, "angles">> & {
+  system?: number;
   radii?: number[];
   gm?: number;
 };
 const orientation = orientationData.bodies as Record<string, OrientationRecord>;
+const orientationSystems = orientationData.systems as Record<string, number[][]>;
 
-function orientationFor(naifId: number): Orientation | undefined {
+function orientationFor(naifId: number): OrientationModel | undefined {
   const record = orientation[naifId];
   if (!record?.poleRa || !record.poleDec || !record.primeMeridian) return undefined;
   return {
-    poleRa: [record.poleRa[0], record.poleRa[1]],
-    poleDec: [record.poleDec[0], record.poleDec[1]],
-    primeMeridian: [record.primeMeridian[0], record.primeMeridian[1]],
+    poleRa: record.poleRa,
+    poleDec: record.poleDec,
+    primeMeridian: record.primeMeridian,
+    nutPrecRa: record.nutPrecRa,
+    nutPrecDec: record.nutPrecDec,
+    nutPrecPm: record.nutPrecPm,
+    angles: record.system === undefined ? undefined : orientationSystems[record.system],
   };
+}
+
+/** SBDB SPK-IDs (20000433) → NAIF IDs (2000433) for numbered asteroids. */
+function naifIdForSmallBody(spkid: number): number {
+  return spkid >= 20_000_000 && spkid < 30_000_000 ? spkid - 18_000_000 : spkid;
 }
 
 const PLANET_NAIF_IDS: Record<string, number> = {
@@ -354,7 +363,7 @@ export class Catalog {
       const color = kind === "dwarf" ? DWARF_COLORS[entry.name] ?? DEFAULT_DWARF_COLOR
         : kind === "comet" ? COMET_COLOR
         : ASTEROID_COLOR;
-      const naifId = entry.name === "Pluto" ? 999 : entry.spkid;
+      const naifId = entry.name === "Pluto" ? 999 : naifIdForSmallBody(entry.spkid);
       const dataSource = `JPL Horizons osculating elements, 1900–2100 (${entry.orbitSolution})`;
 
       // Pluto and Charon orbit their common barycenter, which lies outside
