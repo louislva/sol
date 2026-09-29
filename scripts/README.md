@@ -21,6 +21,7 @@ npm run data:moons        # or any single dataset
 | `fetch-small-bodies.ts` | `src/data/smallBodies.json` | JPL SBDB (identity, size, discovery) and Horizons osculating elements, 1900–2100 |
 | `fetch-asteroids.ts` | `public/data/asteroids.json` | JPL SBDB Query API: the 25,000 brightest asteroids by H |
 | `fetch-spacecraft.ts` | `src/data/spacecraft.json` | Horizons osculating elements for each mission |
+| `fetch-ephemerides.ts` | `public/data/ephemerides.json`, `public/data/moon.json` | Horizons osculating elements: planets every 30 days and named small bodies yearly (1900–2100), the Moon every 2 days (1957–2100) |
 | `fetch-satellites.ts` | `public/data/satellites.json` | CelesTrak GP (OMM) elements, active satellites and constellation groups |
 
 `fetch-orientation.ts` must run before `fetch-moons.ts` and
@@ -28,9 +29,13 @@ npm run data:moons        # or any single dataset
 
 ## How each dataset is modeled
 
-- **Planets** — Standish's mean elements with secular rates. Table 1 is used
-  where it is valid (1800–2050); Table 2 (3000 BC – 3000 AD, with the extra
-  outer-planet terms) outside it. Earth moves about the Earth–Moon
+- **Planets** — at runtime, Horizons osculating elements every 30 days for
+  1900–2100 (`fetch-ephemerides.ts`), blended between samples: tens to
+  hundreds of km from DE440. Bundled fallback and outside that span:
+  Standish's mean elements, Table 1 where valid (1800–2050), Table 2
+  (3000 BC – 3000 AD, with the extra outer-planet terms) beyond.
+- **The Moon** — at runtime, geocentric osculating elements every 2 days for
+  1957–2100 (≲ 120 km); the fitted mean orbit below is the fallback. Earth moves about the Earth–Moon
   barycenter opposite the Moon.
 - **Moons** — for each satellite, a precessing Keplerian orbit (constant
   a, e, i; linearly advancing mean longitude, periapsis and node) is
