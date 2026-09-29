@@ -266,6 +266,14 @@ export class App {
     return this.world.name(this.frameTarget);
   }
 
+  /** Jump to a date; positions and the camera's frame origin update immediately. */
+  setDate(date: Date): void {
+    this.clock.julianDate += (date.getTime() - this.clock.date.getTime()) / 86_400_000;
+    this.world.setTime(this.clock.julianDate);
+    this.world.position(this.frameTarget, this.scratch);
+    this.camera.setOrigin(this.scratch[0], this.scratch[1]);
+  }
+
   setSpeed(mode: SpeedMode): void {
     this.clock.setMode(mode);
     this.controls.setSpeedMode(mode);

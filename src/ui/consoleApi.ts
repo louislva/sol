@@ -90,7 +90,7 @@ export function installConsoleApi(app: App): void {
     setDate(text: string) {
       const date = new Date(text);
       if (Number.isNaN(date.getTime())) return `Invalid date "${text}"; use ISO format like "2024-01-15".`;
-      clock.setDate(date);
+      app.setDate(date);
       return `Date ${clock.format()}`;
     },
     setSpeed(mode: SpeedMode) {

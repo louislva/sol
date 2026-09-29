@@ -44,6 +44,8 @@ const LABEL_FADE_END_PX = 20;
 /** Bodies within this margin (px) of the viewport are still processed. */
 const CULL_MARGIN_PX = 50;
 const SOL_LABEL_ZOOM = 0.0019;
+/** Named asteroids are labelled only in views smaller than this (km). */
+const ASTEROID_LABEL_VIEW_RADIUS_KM = 0.3 * 149_597_870.7;
 /** Discs larger than this (px) are drawn as the part that crosses the viewport. */
 const LARGE_DISC_PX = 20_000;
 const SOL_FADE_MS = 300;
@@ -264,8 +266,11 @@ export class Renderer {
 
       if (body.kind === "star") this.drawSolLabel(camera, x, y, radius, frameMs);
 
-      // Label bodies drawn near their minimum size; larger discs speak for themselves.
-      if (radius <= MIN_RADIUS_PX[body.kind] * 1.5 || hovered || selected) {
+      // Label bodies drawn near their minimum size (larger discs speak for
+      // themselves). Individual asteroids only get one close up.
+      const labelled = hovered || selected || (radius <= MIN_RADIUS_PX[body.kind] * 1.5
+        && (body.kind !== "asteroid" || camera.viewRadius < ASTEROID_LABEL_VIEW_RADIUS_KM));
+      if (labelled) {
         this.labels.add(
           body.name,
           x,
