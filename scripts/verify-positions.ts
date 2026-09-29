@@ -74,6 +74,8 @@ async function main(): Promise<void> {
     const ephemerides = path.join(ROOT, "public/data/ephemerides.json");
     if (fs.existsSync(ephemerides) && !process.env.TABLES_ONLY) {
       world.catalog.applyEphemerides(JSON.parse(fs.readFileSync(ephemerides, "utf8")));
+      const moon = path.join(ROOT, "public/data/moon.json");
+      if (fs.existsSync(moon)) world.catalog.applySeries("Moon", JSON.parse(fs.readFileSync(moon, "utf8")).moon);
     }
 
     for (const iso of isoDates) {
