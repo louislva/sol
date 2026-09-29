@@ -33,6 +33,11 @@ body {
   cursor: grabbing;
 }
 
+#sidebar-content .sidebar-value {
+  max-width: 62%;
+  overflow-wrap: anywhere;
+}
+
 #ui {
   position: fixed;
   bottom: 24px;
@@ -126,7 +131,7 @@ body {
   color: var(--text);
 }
 
-#speed-indicator {
+#status-line {
   font-size: 11px;
   color: var(--text-dim);
   opacity: 0.6;
@@ -175,6 +180,31 @@ body {
   font-weight: 700;
   margin: 0 0 4px 0;
   letter-spacing: 0.02em;
+}
+
+.sidebar-follow {
+  display: block;
+  width: 100%;
+  margin: -8px 0 16px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sidebar-follow:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-follow.active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .sidebar-type {
@@ -291,7 +321,7 @@ body {
     padding: 6px 7px;
   }
 
-  #speed-indicator {
+  #status-line {
     font-size: 9px;
   }
 }
