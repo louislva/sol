@@ -18,6 +18,9 @@ export const SPEEDS: Record<Exclude<SpeedMode, "auto">, number> = {
  */
 const MAX_STEP_MS = 100;
 
+/** How quickly a paced auto speed follows changes in the action. */
+const PACE_TIME_CONSTANT_MS = 400;
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
@@ -67,8 +70,19 @@ export class Clock {
     this.rate = rate;
   }
 
-  advance(realMs: number, zoom: number): void {
-    if (this.mode === "auto") this.rate = autoSpeedForZoom(zoom);
+  /**
+   * @param pacedRate in auto mode, a rate to use instead of the zoom-based
+   *   one (e.g. pacing a followed spacecraft's motion); smoothed over time.
+   */
+  advance(realMs: number, zoom: number, pacedRate?: number): void {
+    if (this.mode === "auto") {
+      const target = pacedRate ?? autoSpeedForZoom(zoom);
+      // Ease toward the target in log space so pace changes feel natural.
+      const blend = 1 - Math.exp(-Math.min(realMs, MAX_STEP_MS) / PACE_TIME_CONSTANT_MS);
+      this.rate = pacedRate === undefined
+        ? target
+        : Math.exp(Math.log(Math.max(1, this.rate)) + (Math.log(target) - Math.log(Math.max(1, this.rate))) * blend);
+    }
     const stepMs = Math.min(realMs, MAX_STEP_MS);
     this.julianDate += (stepMs / 1000) * this.rate / SECONDS_PER_DAY;
   }

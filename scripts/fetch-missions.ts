@@ -189,9 +189,6 @@ interface SegmentPlan {
   parent: CandidateBody | null; // null: the Sun
 }
 
-async function heliocentric(command: string, start: number, end: number): Promise<StateTable> {
-  return vectorGrid(command, "500@10", start, end, COARSE_STEP_MINUTES);
-}
 
 /** The deepest candidate whose region contains the spacecraft at each sample. */
 function assignParents(
@@ -236,21 +233,22 @@ function exactIndex(table: StateTable, jd: number): number {
   return low;
 }
 
+interface Window {
+  start: number;
+  end: number;
+  step: number; // days
+  bodies: Set<CandidateBody>;
+}
+
+type Sample = { jd: number; parent: CandidateBody | null };
+
 /**
- * Parent timeline for a mission: daily samples, refined around any
- * interval where a region boundary might be crossed or an encounter hidden.
+ * Intervals between samples where a region boundary is crossed, or where
+ * the spacecraft could pass through a region unseen (the closest approach of
+ * the straight-line relative motion comes within 1.5 regions).
  */
-async function planSegments(config: MissionConfig, start: number, end: number, bodies: CandidateBody[]): Promise<SegmentPlan[]> {
-  const command = String(config.spkid);
-  const craft = await heliocentric(command, start, end);
-  const tables = new Map<string, StateTable>();
-  for (const body of bodies) tables.set(body.name, await heliocentric(body.command, craft.jd[0], craft.jd[craft.jd.length - 1] + 1e-6));
-
-  const coarse = assignParents(craft, bodies, tables, exactIndex);
-
-  // Intervals to refine: parent changes, or a possible pass through a region
-  // between samples (closest approach of the straight-line relative motion).
-  const windows: Array<{ start: number; end: number; step: number; bodies: Set<CandidateBody> }> = [];
+function flagWindows(craft: StateTable, parents: Array<CandidateBody | null>, bodies: CandidateBody[], tables: Map<string, StateTable>): Window[] {
+  const windows: Window[] = [];
   for (let k = 0; k + 1 < craft.jd.length; k++) {
     let step = Number.POSITIVE_INFINITY;
     const flagged = new Set<CandidateBody>();
@@ -262,22 +260,20 @@ async function planSegments(config: MissionConfig, start: number, end: number, b
       const speed = norm(velocity);
       const tau = speed > 0 ? Math.max(0, Math.min(span, -dot(relative, velocity) / (speed * speed))) : 0;
       const closest = norm(relative.map((value, axis) => value + velocity[axis] * tau));
-      const parentGm = body.parent && body.parent !== "Sun" ? bodies.find((b) => b.name === body.parent)!.gm : GM_SUN;
-      const parentPosition = body.parent && body.parent !== "Sun" ? tables.get(body.parent)!.position[k] : [0, 0, 0];
+      const parentBody = bodies.find((candidate) => candidate.name === body.parent);
+      const parentGm = parentBody ? parentBody.gm : GM_SUN;
+      const parentPosition = parentBody ? tables.get(parentBody.name)!.position[k] : [0, 0, 0];
       const region = regionRadius(body, norm(sub(table.position[k], parentPosition)), parentGm);
-      const crossing = (coarse[k] === body) !== (coarse[k + 1] === body);
-      if (crossing || (closest < 1.5 * region && coarse[k] !== body)) {
+      const crossing = (parents[k] === body) !== (parents[k + 1] === body);
+      if (crossing || (closest < 1.5 * region && parents[k] !== body)) {
         step = Math.min(step, Math.max(MINUTE, Math.min(60 * MINUTE, region / Math.max(speed, 1) / 20)));
         flagged.add(body);
       }
     }
     if (Number.isFinite(step)) windows.push({ start: craft.jd[k], end: craft.jd[k + 1], step, bodies: flagged });
   }
-
-  // Merge adjacent windows and resample them finely, against the bodies
-  // involved (and their parents, which set their regions) plus the parents
-  // in effect at either end.
-  const merged: typeof windows = [];
+  // Merge adjacent windows.
+  const merged: Window[] = [];
   for (const window of windows) {
     const last = merged[merged.length - 1];
     if (last && window.start <= last.end + 1e-9) {
@@ -288,27 +284,92 @@ async function planSegments(config: MissionConfig, start: number, end: number, b
       merged.push({ ...window, bodies: new Set(window.bodies) });
     }
   }
+  return merged;
+}
 
-  const timeline: Array<{ jd: number; parent: CandidateBody | null }> = craft.jd.map((jd, k) => ({ jd, parent: coarse[k] }));
-  for (const window of merged) {
-    const stepMinutes = Math.max(1, Math.round(Math.max(window.step, (window.end - window.start) / 4000) * 1440));
-    const involved = new Set(window.bodies);
-    for (const jd of [window.start, window.end]) {
-      const parent = coarse[exactIndex(craft, jd)];
-      if (parent) involved.add(parent);
-    }
-    for (const body of [...involved]) {
-      const parent = bodies.find((candidate) => candidate.name === body.parent);
-      if (parent) involved.add(parent);
-    }
-    const local = bodies.filter((body) => involved.has(body));
-    const fineCraft = await vectorGrid(command, "500@10", window.start, window.end, stepMinutes);
-    const fineTables = new Map<string, StateTable>();
-    for (const body of local) fineTables.set(body.name, await vectorGrid(body.command, "500@10", window.start, window.end, stepMinutes));
-    const fine = assignParents(fineCraft, local, fineTables, exactIndex);
-    fineCraft.jd.forEach((jd, index) => timeline.push({ jd, parent: fine[index] }));
+/** Sample the spacecraft and the given bodies on a grid and assign parents. */
+async function scanGrid(command: string, bodies: CandidateBody[], start: number, end: number, stepMinutes: number) {
+  const craft = await vectorGrid(command, "500@10", start, end, stepMinutes);
+  const tables = new Map<string, StateTable>();
+  for (const body of bodies) tables.set(body.name, await vectorGrid(body.command, "500@10", start, end, stepMinutes));
+  const parents = assignParents(craft, bodies, tables, exactIndex);
+  return { craft, tables, parents };
+}
+
+/** Replace the samples strictly inside (start, end) with finer ones. */
+function replaceSamples(timeline: Sample[], start: number, end: number, finer: Sample[]): Sample[] {
+  return [...timeline.filter((sample) => sample.jd <= start || sample.jd >= end), ...finer].sort((a, b) => a.jd - b.jd);
+}
+
+/** Bodies involved in a window, plus their parents (which set their regions). */
+function involvedBodies(window: Window, bodies: CandidateBody[], atEnds: Array<CandidateBody | null>): CandidateBody[] {
+  const involved = new Set(window.bodies);
+  for (const parent of atEnds) if (parent) involved.add(parent);
+  for (const body of [...involved]) {
+    const parent = bodies.find((candidate) => candidate.name === body.parent);
+    if (parent) involved.add(parent);
   }
-  timeline.sort((a, b) => a.jd - b.jd);
+  return bodies.filter((body) => involved.has(body));
+}
+
+/**
+ * Parent timeline for a mission, in three passes: daily samples against all
+ * bodies; hourly samples against a planet's moons wherever the spacecraft is
+ * inside that planet's region (an orbiter's path curves too much in a day
+ * for straight-line checks); minute-level refinement around every crossing
+ * or possible hidden encounter.
+ */
+async function planSegments(config: MissionConfig, start: number, end: number, bodies: CandidateBody[]): Promise<SegmentPlan[]> {
+  const command = String(config.spkid);
+  const daily = await scanGrid(command, bodies, start, end, COARSE_STEP_MINUTES);
+  let timeline: Sample[] = daily.craft.jd.map((jd, k) => ({ jd, parent: daily.parents[k] }));
+  const fineWindows: Array<{ window: Window; atEnds: Array<CandidateBody | null> }> = [];
+  /** Parent of the last sample at or before jd. */
+  const parentAt = (jd: number) => {
+    let low = 0;
+    let high = timeline.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (timeline[middle].jd <= jd + 1e-7) low = middle;
+      else high = middle - 1;
+    }
+    return timeline[low].parent;
+  };
+
+  // Hourly passes inside planet regions that have candidate moons.
+  const hourlySpans: Array<[number, number]> = [];
+  for (const planet of bodies.filter((body) => bodies.some((moon) => moon.parent === body.name))) {
+    const family = [planet, ...bodies.filter((body) => body.parent === planet.name)];
+    let spanStart: number | null = null;
+    for (let k = 0; k <= daily.craft.jd.length; k++) {
+      const inside = k < daily.craft.jd.length && family.includes(daily.parents[k]!);
+      if (inside && spanStart === null) spanStart = daily.craft.jd[Math.max(0, k - 1)];
+      if (!inside && spanStart !== null) {
+        const spanEnd = daily.craft.jd[Math.min(daily.craft.jd.length - 1, k)];
+        const hourly = await scanGrid(command, family, spanStart, spanEnd, 60);
+        timeline = replaceSamples(timeline, spanStart, spanEnd, hourly.craft.jd.map((jd, index) => ({ jd, parent: hourly.parents[index] })));
+        for (const window of flagWindows(hourly.craft, hourly.parents, family, hourly.tables)) {
+          fineWindows.push({ window, atEnds: [hourly.parents[exactIndex(hourly.craft, window.start)], hourly.parents[exactIndex(hourly.craft, window.end)]] });
+        }
+        hourlySpans.push([spanStart, spanEnd]);
+        spanStart = null;
+      }
+    }
+  }
+
+  // Daily-level windows outside the hourly spans.
+  for (const window of flagWindows(daily.craft, daily.parents, bodies, daily.tables)) {
+    if (hourlySpans.some(([a, b]) => window.start >= a && window.end <= b)) continue;
+    fineWindows.push({ window, atEnds: [parentAt(window.start), parentAt(window.end)] });
+  }
+
+  // Minute-level refinement.
+  for (const { window, atEnds } of fineWindows) {
+    const stepMinutes = Math.max(1, Math.round(Math.max(window.step, (window.end - window.start) / 4000) * 1440));
+    const local = involvedBodies(window, bodies, atEnds);
+    const fine = await scanGrid(command, local, window.start, window.end, stepMinutes);
+    timeline = replaceSamples(timeline, window.start, window.end, fine.craft.jd.map((jd, index) => ({ jd, parent: fine.parents[index] })));
+  }
 
   // Runs of the same parent become segments; boundaries at the midpoints.
   const segments: SegmentPlan[] = [];
@@ -318,7 +379,7 @@ async function planSegments(config: MissionConfig, start: number, end: number, b
     if (last && last.parent === sample.parent) continue;
     const boundary = index === 0 ? start : (timeline[index - 1].jd + sample.jd) / 2;
     if (last) last.end = boundary;
-    segments.push({ start: boundary, end: end, parent: sample.parent });
+    segments.push({ start: boundary, end, parent: sample.parent });
   }
   return segments;
 }

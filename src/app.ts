@@ -28,6 +28,10 @@ const HOVER_REFRESH_MS = 100;
 const UI_REFRESH_MS = 100;
 /** Device pixel ratio cap: beyond 2× the extra fill cost buys little. */
 const MAX_PIXEL_RATIO = 2;
+/** While following, auto speed moves the object about this fast on screen. */
+const FOLLOW_PACE_PX_PER_SECOND = 40;
+/** Fastest auto speed (simulated seconds per second): five years per second. */
+const MAX_AUTO_RATE = 5 * 31_557_600;
 
 export class App {
   readonly world = new World();
@@ -113,7 +117,7 @@ export class App {
     const dt = Math.max(0, now - this.lastFrameMs);
     this.lastFrameMs = now;
 
-    this.clock.advance(dt, this.camera.zoom);
+    this.clock.advance(dt, this.camera.zoom, this.followed ? this.pacedRate() : undefined);
     this.world.setTime(this.clock.julianDate);
     this.camera.update(dt);
     profiler.measure("frame selection", () => this.updateReferenceFrame());
@@ -137,6 +141,34 @@ export class App {
       profiler.measure("ui", () => this.refreshUi());
     }
     profiler.endFrame();
+  }
+
+  /**
+   * Auto speed while following: the rate at which the followed object moves
+   * a comfortable number of pixels per second relative to the body it is
+   * near — fast through a long cruise, slow motion at a flyby.
+   */
+  private pacedRate(): number | undefined {
+    const target = this.followed!;
+    // A followed body that is itself the frame has no motion to pace.
+    if (target.type === "body" && target.body === this.autoFrame) return undefined;
+    const context: Target = { type: "body", body: this.autoFrame };
+    const t = this.world.time;
+    const probe = 60 / 86_400; // one minute
+    const now = [0, 0, 0];
+    const later = [0, 0, 0];
+    const frameNow = [0, 0, 0];
+    const frameLater = [0, 0, 0];
+    this.world.positionAt(target, t, now);
+    this.world.positionAt(target, t + probe, later);
+    this.world.positionAt(context, t, frameNow);
+    this.world.positionAt(context, t + probe, frameLater);
+    const kmPerSecond = Math.hypot(
+      later[0] - now[0] - (frameLater[0] - frameNow[0]),
+      later[1] - now[1] - (frameLater[1] - frameNow[1])
+    ) / 60;
+    const rate = FOLLOW_PACE_PX_PER_SECOND / Math.max(1e-9, kmPerSecond * this.camera.zoom);
+    return Math.min(MAX_AUTO_RATE, Math.max(1, rate));
   }
 
   /**
