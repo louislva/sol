@@ -22,110 +22,95 @@ Random/procedural generation of orbital parameters is NOT acceptable.
 
 ## Development
 ```bash
-npm run dev      # Start dev server
-npm run build    # Build for production
-npx tsc --noEmit # Type check
+npm run dev        # Start dev server
+npm run build      # Type check + production build
+npm run typecheck  # Type check app and data scripts
+npm run verify     # Compare computed positions with JPL Horizons
+npm run data:all   # Regenerate every data file (see scripts/README.md)
 ```
 
 ## Visual Design
 - Background: `#000000` (black)
 - Orbits: Body color with low opacity
 - Sun: `#ffff00` (yellow)
-- Planets: Distinct colors per planet
-- Probes: White icon (cylinder + solar panels)
+- Planets: Distinct colors per planet (`src/data/palette.ts`)
+- Spacecraft: Flat icons (probe, orbiter, telescope)
 
 ## Architecture
 ```
 src/
-├── main.ts                 # Entry point, combines all bodies
-├── style.css               # Dark theme
-├── core/
-│   ├── camera.ts           # Zoom/pan, coordinate transforms
-│   ├── renderer.ts         # Canvas drawing, LOD asteroid rendering
-│   └── time.ts             # Time simulation, speed controls
-├── astronomy/
-│   ├── kepler.ts           # Orbital mechanics (heliocentric + parent-centric)
-│   ├── bodies.ts           # CelestialBody interface, planets, dwarf planets
-│   ├── constants.ts        # AU, colors, min display sizes
-│   ├── asteroidBelt.ts     # LOD system for 10,000+ asteroids
-│   └── tle.ts              # TLE parsing for satellites
-├── data/
-│   ├── moons.json          # Moon orbital data from JPL (66 moons)
-│   ├── moons.ts            # Moon data loader and filtering
-│   ├── probes.ts           # Space probes with segmented orbits (legacy)
-│   ├── spacecraft.json     # Spacecraft data from JPL Horizons (29+ missions)
-│   ├── spacecraft.ts       # Spacecraft loader with timeline filtering
-│   ├── satellites.json     # Earth satellite TLE data from CelesTrak (64 satellites)
-│   ├── satellites.ts       # Satellite data loader and filtering
-│   └── comets.ts           # Comet orbital data
-scripts/
-├── fetch-moons.ts          # Download moon data from JPL Horizons
-├── fetch-spacecraft.ts     # Download spacecraft data from JPL Horizons
-├── fetch-asteroids.ts      # Download MPCORB asteroid data
-├── fetch-satellites.ts     # Download TLE satellite data
-└── README.md               # Data regeneration docs
+├── main.ts                   # Entry point
+├── app.ts                    # Frame loop, reference frame, selection/follow, commands
+├── astro/                    # Pure math, no app state
+│   ├── constants.ts          # Units, epochs, time scales (UTC ↔ TDB)
+│   ├── rotation.ts           # Frame rotations (ICRF, ecliptic, pole frames)
+│   └── kepler.ts             # KeplerOrbit: 3D conics with secular drift, path sampling
+├── model/                    # What exists and where it is
+│   ├── body.ts               # Body, Motion, MotionSegment (the time-segmented model)
+│   ├── catalog.ts            # Builds all bodies from src/data/*.json
+│   ├── ephemeris.ts          # Hierarchical position resolution, per-frame cache
+│   ├── world.ts              # Catalog + ephemeris + populations; Target type
+│   ├── clock.ts              # Simulation time and speed modes
+│   ├── asteroidPopulation.ts # 25k asteroids, structure-of-arrays
+│   └── satellitePopulation.ts# Earth satellites with J2 drift, constellation bands
+├── view/
+│   ├── camera.ts             # Camera in a moving reference frame
+│   ├── referenceFrame.ts     # Automatic reference-frame choice
+│   ├── input.ts              # Pointer/wheel/touch/gesture → intents
+│   ├── renderer.ts           # Frame composition, projection, occlusion
+│   ├── picking.ts            # Hit testing against what was drawn
+│   └── layers/               # orbits, rings, labels, icons, populations, scale bar
+├── ui/                       # Controls, info sidebar, console API, Wikipedia
+└── data/                     # Generated JSON (+ palette.ts); see scripts/README.md
+scripts/                      # Data fetchers (Node ≥ 22.18 runs .ts directly)
+public/data/                  # Large datasets loaded at runtime (asteroids, satellites)
 ```
 
 ## Key Design Decisions
 
-### True Scale with Minimum Size
-All objects at real size (km), clamped to minimum pixel sizes when zoomed out:
-- Sun: 20px min
-- Planets: 4px min
-- Dwarf planets/moons: 3px min
-- Asteroids/comets: 2px min
-- Probes: 8px min (custom icon)
+### Coordinates and time
+Everything is heliocentric J2000 ecliptic, in km, 3D. The view is top-down,
+so screen x/y are world x/y: inclined orbits appear as the ellipses you
+would see from above (Uranus's moons, Saturn's rings). Simulation time is a
+Julian date in TDB; UTC sources (TLEs, the wall clock) are converted.
 
-### Hierarchical Positioning
-- `OrbitalElements` - heliocentric orbits (AU-based, planets/comets/asteroids)
-- `ParentCentricElements` - parent-relative orbits (km-based, moons/satellites)
-- `parentName` field links child to parent body
-- Recursive position resolution in `getBodyPosition()`
+### Motion timelines
+A `Body` has `segments`: each covers a time span, names the parent the
+motion is relative to, and a `Motion`: `fixed`, `kepler` (a `KeplerOrbit`,
+optionally with secular drift), `keplerSeries` (osculating conics sampled
+over time and blended), or `barycentric` (Earth's reflex motion about the
+Earth–Moon barycenter). Planets switch JPL element tables at 1800/2050 this
+way. A spacecraft can be modeled as launch → cruise → orbit/landing segments
+with different parents. `existsFrom`/`existsUntil` bound when a body is in
+the scene.
 
-### Segmented Orbits
-For objects with trajectory changes (gravity assists):
-```typescript
-segments: [
-  { startJD, endJD, elements: OrbitalElements },
-  // ... more segments
-]
-```
+### Reference frames
+The camera stores its center as an offset from a frame body that moves with
+it. Automatically, the frame is the deepest body whose region (Hill sphere,
+widened to cover its moons) contains the view center while the view is not
+much larger than that region — Earth when looking at satellites, Jupiter for
+the Galilean moons, the Sun for the planets. `Follow` (sidebar button,
+double-click, or `sol.follow`) locks the frame to any object; Esc releases.
 
-### Asteroid Belt LOD
-- **Zoomed out (>20 AU)**: Statistical ring overlay
-- **Medium zoom**: ~500 sampled asteroids
-- **Zoomed in**: Up to 2000 asteroids in viewport
+### True scale with minimum size
+Bodies are drawn at true size, clamped to a minimum on-screen radius per kind
+(Sun 20px, planets 4px, dwarfs/moons 3px, asteroids/comets 2px, spacecraft
+8px icons). Bodies with no published radius are drawn at the minimum.
 
-### Satellite LOD
-- **Zoomed out**: Satellites hidden for performance
-- **Zoomed to Earth (>30px Earth radius)**: 64 satellites visible (LEO, MEO, GEO)
-- Satellites use TLE (Two-Line Element) orbital data from CelesTrak
-- Categories: LEO (red), MEO (blue), GEO (green)
+### Occlusion
+When a parent's disc is resolved, a moon or satellite is hidden only while it
+is behind the parent. When the parent is drawn at its minimum size, children
+fade out as they merge into it; labels fade earlier. Satellite systems whose
+whole orbit is inside the parent's disc are not even propagated.
 
-### Parent Occlusion
-Bodies fade out when visually inside their parent's minimum display size.
-Labels fade earlier (32-64px from parent edge).
-
-## Current Status (Phase 3 In Progress)
-- [x] Canvas with zoom/pan
-- [x] 8 planets with real orbital data
-- [x] Time simulation with speed controls
-- [x] Dwarf planets (Pluto, Ceres, Eris, Makemake, Haumea)
-- [x] Major moons (66 moons from JPL Horizons)
-- [x] Asteroid belt with LOD (10,000 asteroids)
-- [x] Notable comets (Halley, Hale-Bopp, NEOWISE, etc.)
-- [x] Space probes from JPL Horizons (29+ missions with real ephemerides)
-- [x] Custom spacecraft icons (probe, telescope, orbiter, rover)
-- [x] Timeline filtering (spacecraft appear/disappear based on mission dates)
-- [x] Data fetch scripts for asteroids, satellites, and spacecraft
-- [x] Earth satellites (64 satellites: LEO, MEO, GEO) with LOD visibility
-
-## Future Features
-- [ ] Click for object info popups
-- [ ] Search & highlight
-- [ ] Reverse time
-- [ ] Jump to specific date
-- [ ] Scale reference overlay
+### Level of detail
+- Orbit paths: point count from on-screen size (sub-pixel chord error),
+  sampled in eccentric anomaly; huge orbits sample only the arc near the view.
+- Asteroid cloud: sorted by size (H), draws the largest N for the current
+  scale; positions refreshed only when they could have moved ¼ px.
+- Satellites appear once Earth's satellite system spans a few pixels.
+- Moons: filter by category (major/medium/named/all).
+- Labels: placed by priority, never overlapping.
 
 ## Browser Debugging
 
@@ -138,6 +123,8 @@ The app exposes a `window.sol` object for programmatic control via the browser c
 ### Navigation
 ```js
 sol.goto("Earth")          // Center camera on a body (auto-zooms by type)
+sol.follow("ISS (ZARYA)")  // Lock the camera frame to an object
+sol.unfollow()             // Back to the automatic reference frame
 sol.pan(1, 0)              // Pan by offset in AU
 sol.panToAU(1, 0)          // Pan to absolute position in AU
 sol.panTo(x, y)            // Pan to absolute position in km
@@ -161,7 +148,7 @@ sol.getDate()              // Get current simulation date string
 sol.listBodies()           // List all body names (string[])
 sol.findBody("mars")       // Search bodies by name substring
 sol.getBody("Earth")       // Get body name, type, position (km and AU)
-sol.status()               // Get camera center, zoom, date, speed info
+sol.status()               // Camera center, zoom, date, speed, reference frame
 ```
 
 ### Selection
@@ -171,17 +158,6 @@ sol.deselect()             // Clear selection
 ```
 
 ## Data Sources
-- **Planets**: NASA JPL Horizons (https://ssd.jpl.nasa.gov/planets/approx_pos.html)
-- **Moons**: NASA JPL Horizons API (https://ssd.jpl.nasa.gov/api/horizons.api)
-- **Spacecraft**: NASA JPL Horizons API (orbital elements for 29+ missions)
-- **Asteroids**: Minor Planet Center MPCORB (https://www.minorplanetcenter.net/)
-- **Satellites**: CelesTrak TLE (https://celestrak.org/)
-- **Comets**: NASA JPL Small-Body Database
-
-## Regenerating Data
-```bash
-npx tsx scripts/fetch-moons.ts        # Fetch moon data from JPL Horizons
-npx tsx scripts/fetch-spacecraft.ts   # Fetch spacecraft data from JPL Horizons
-npx ts-node scripts/fetch-asteroids.ts 10000
-npx ts-node scripts/fetch-satellites.ts
-```
+See `scripts/README.md`. In short: NAIF PCK/GM kernels, JPL approximate
+planet elements, JPL Horizons (moons, small bodies, spacecraft), JPL SBDB
+(asteroids), CelesTrak (Earth satellites).
