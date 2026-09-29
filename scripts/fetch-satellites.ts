@@ -1,9 +1,8 @@
 /**
  * Build the satellite catalog used by the Earth view.
  *
- * Every active satellite that is not part of a large constellation is kept as
- * an individual object. Constellations are collapsed into orbital shell bands
- * derived from the current positions of their active members.
+ * Every active satellite is kept as an individual object; members of the
+ * large constellations (Starlink, OneWeb, GPS, ...) are tagged with theirs.
  *
  * Source: CelesTrak GP data in OMM JSON format.
  * Output: public/data/satellites.json
@@ -24,8 +23,6 @@ const EARTH_MU = 398600.4418; // km^3/s^2
 const EARTH_RADIUS = 6378.137; // km
 const MILLIS_PER_DAY = 86_400_000;
 const UNIX_EPOCH_JULIAN_DATE = 2440587.5;
-const SHELL_SPLIT_GAP_KM = 150;
-const MINIMUM_BAND_THICKNESS_KM = 50;
 const REQUEST_DELAY_MS = 600;
 
 type SatelliteCategory = "LEO" | "MEO" | "GEO" | "OTHER";
@@ -54,6 +51,8 @@ interface SatelliteData {
   n: number;
   epoch: number;
   category: SatelliteCategory;
+  /** Index into the catalog's constellations, or −1. */
+  constellation?: number;
 }
 
 interface ConstellationSource {
@@ -66,31 +65,24 @@ interface ConstellationDefinition extends ConstellationSource {
   namePatterns: RegExp[];
 }
 
-interface ConstellationBand {
-  innerRadiusKm: number;
-  outerRadiusKm: number;
-  meanRadiusKm: number;
+interface ConstellationData extends ConstellationSource {
   count: number;
 }
 
-interface ConstellationData extends ConstellationSource {
-  count: number;
-  bands: ConstellationBand[];
-}
+/** Row layout of `satellites` (a compact table: ~16k rows). */
+const COLUMNS = ["noradId", "name", "a", "e", "i", "Omega", "omega", "M0", "n", "epoch", "category", "constellation"] as const;
 
 interface SatelliteCatalog {
   generatedAt: string;
   source: string;
-  activeSatelliteCount: number;
-  individualSatelliteCount: number;
-  satellites: SatelliteData[];
+  columns: typeof COLUMNS;
+  satellites: (string | number)[][];
   constellations: ConstellationData[];
 }
 
-// These groups are visually more truthful as population bands than as ten
-// thousand overlapping points. Navigation systems count as constellations too.
+// Large groups, colored together. Navigation systems count as constellations too.
 const CONSTELLATION_SOURCES: ConstellationDefinition[] = [
-  { name: "Starlink", group: "starlink", color: "#72a7ff", namePatterns: [/^STARLINK-/i] },
+  { name: "Starlink", group: "starlink", color: "#c8d2e0", namePatterns: [/^STARLINK-/i] },
   { name: "OneWeb", group: "oneweb", color: "#83d6ff", namePatterns: [/^ONEWEB-/i] },
   { name: "Qianfan", group: "qianfan", color: "#ff9f72", namePatterns: [/^QIANFAN-/i] },
   { name: "Hulianwang", group: "hulianwang", color: "#ffcf6e", namePatterns: [/^HULIANWANG/i] },
@@ -240,40 +232,6 @@ function deduplicateByNoradId(satellites: SatelliteData[]): SatelliteData[] {
   return [...byNoradId.values()];
 }
 
-function buildBands(satellites: SatelliteData[]): ConstellationBand[] {
-  if (satellites.length === 0) return [];
-
-  const sorted = [...satellites].sort((left, right) => left.a - right.a);
-  const shells: SatelliteData[][] = [[sorted[0]]];
-
-  for (let index = 1; index < sorted.length; index++) {
-    const satellite = sorted[index];
-    const previous = sorted[index - 1];
-    if (satellite.a - previous.a > SHELL_SPLIT_GAP_KM) {
-      shells.push([]);
-    }
-    shells[shells.length - 1].push(satellite);
-  }
-
-  return shells.map((shell) => {
-    const meanRadiusKm = shell.reduce((sum, satellite) => sum + satellite.a, 0) / shell.length;
-    let innerRadiusKm = Math.min(...shell.map((satellite) => satellite.a * (1 - satellite.e)));
-    let outerRadiusKm = Math.max(...shell.map((satellite) => satellite.a * (1 + satellite.e)));
-
-    if (outerRadiusKm - innerRadiusKm < MINIMUM_BAND_THICKNESS_KM) {
-      innerRadiusKm = meanRadiusKm - MINIMUM_BAND_THICKNESS_KM / 2;
-      outerRadiusKm = meanRadiusKm + MINIMUM_BAND_THICKNESS_KM / 2;
-    }
-
-    return {
-      innerRadiusKm,
-      outerRadiusKm,
-      meanRadiusKm,
-      count: shell.length,
-    };
-  });
-}
-
 async function main(): Promise<void> {
   console.log("Fetching the active satellite catalog from CelesTrak...");
   const localActivePath = process.env.ACTIVE_CATALOG_PATH;
@@ -310,23 +268,35 @@ async function main(): Promise<void> {
 
     for (const satellite of groupSatellites) {
       constellationIds.add(satellite.noradId);
+      satellite.constellation = constellations.length;
     }
 
-    const bands = buildBands(groupSatellites);
-    constellations.push({ ...source, count: groupSatellites.length, bands });
-    console.log(`  ${groupSatellites.length.toLocaleString()} active members → ${bands.length} band${bands.length === 1 ? "" : "s"}`);
+    constellations.push({ ...source, count: groupSatellites.length });
+    console.log(`  ${groupSatellites.length.toLocaleString()} active members`);
   }
 
-  const satellites = activeSatellites
-    .filter((satellite) => !constellationIds.has(satellite.noradId))
-    .sort((left, right) => left.noradId - right.noradId);
+  const satellites = activeSatellites.sort((left, right) => left.noradId - right.noradId);
+  const round = (value: number, digits: number) => Number(value.toFixed(digits));
 
   const catalog: SatelliteCatalog = {
     generatedAt: new Date().toISOString(),
     source: "https://celestrak.org/NORAD/elements/",
-    activeSatelliteCount: activeSatellites.length,
-    individualSatelliteCount: satellites.length,
-    satellites,
+    columns: COLUMNS,
+    // OMM elements carry ~4 decimals in angles and ~8 in mean motion.
+    satellites: satellites.map((satellite) => [
+      satellite.noradId,
+      satellite.name,
+      round(satellite.a, 2),
+      round(satellite.e, 7),
+      round(satellite.i, 4),
+      round(satellite.Omega, 4),
+      round(satellite.omega, 4),
+      round(satellite.M0, 4),
+      round(satellite.n, 6),
+      round(satellite.epoch, 8),
+      satellite.category,
+      satellite.constellation ?? -1,
+    ]),
     constellations,
   };
 
@@ -335,7 +305,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(temporaryPath, JSON.stringify(catalog));
   fs.renameSync(temporaryPath, OUTPUT_PATH);
 
-  console.log(`\nWrote ${satellites.length.toLocaleString()} individual satellites and ${constellations.length} constellation groups`);
+  console.log(`\nWrote ${satellites.length.toLocaleString()} satellites (${constellationIds.size.toLocaleString()} in ${constellations.length} constellations)`);
   console.log(`Output: ${OUTPUT_PATH}`);
 }
 
@@ -344,4 +314,4 @@ main().catch((error: unknown) => {
   process.exitCode = 1;
 });
 
-export { buildBands, parseOmmRecord };
+export { parseOmmRecord };

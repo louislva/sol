@@ -1,7 +1,7 @@
 /**
- * Active Earth satellites from CelesTrak, and the orbital shells of the
- * large constellations (Starlink, OneWeb, GPS, ...), which read better as
- * population bands than as thousands of overlapping dots.
+ * Every active Earth satellite from CelesTrak. Members of the large
+ * constellations (Starlink, OneWeb, GPS, ...) are colored by constellation,
+ * the rest by orbit class.
  *
  * Propagation is Keplerian plus the secular J2 drift of the node and the
  * argument of perigee — the dominant effect over the weeks between catalog
@@ -24,41 +24,27 @@ import { SATELLITE_CATEGORY_COLORS } from "../data/palette";
 export type SatelliteCategory = keyof typeof SATELLITE_CATEGORY_COLORS;
 const CATEGORIES = Object.keys(SATELLITE_CATEGORY_COLORS) as SatelliteCategory[];
 
-interface SatelliteRecord {
-  noradId: number;
-  name: string;
-  a: number;
-  e: number;
-  i: number;
-  Omega: number;
-  omega: number;
-  M0: number;
-  n: number;     // deg/day
-  epoch: number; // JD (UTC)
-  category: SatelliteCategory;
-}
-
-export interface ConstellationBand {
-  innerRadiusKm: number;
-  outerRadiusKm: number;
-  meanRadiusKm: number;
-  count: number;
-}
+/**
+ * One row of the catalog table: NORAD id, name, a (km), e, i, Ω, ω, M0 (deg),
+ * n (deg/day), epoch (JD UTC), orbit class, constellation index (−1 if none).
+ */
+type SatelliteRow = [number, string, number, number, number, number, number, number, number, number, SatelliteCategory, number];
 
 export interface SatelliteConstellation {
   name: string;
   group: string;
   color: string;
   count: number;
-  bands: ConstellationBand[];
 }
 
 interface SatelliteFile {
   generatedAt: string;
-  satellites: SatelliteRecord[];
+  satellites: SatelliteRow[];
   constellations: SatelliteConstellation[];
 }
 
+/** Satellites too fast to follow frame to frame are refreshed in this many slices. */
+const ALIASED_SLICES = 4;
 const COS_OBLIQUITY = Math.cos(OBLIQUITY_J2000);
 const SIN_OBLIQUITY = Math.sin(OBLIQUITY_J2000);
 
@@ -69,6 +55,12 @@ export class SatellitePopulation {
   readonly categoryIndex: Uint8Array;
   readonly categories = CATEGORIES;
   readonly constellations: readonly SatelliteConstellation[];
+  /** Constellation of each satellite, or −1. */
+  readonly constellationIndex: Int16Array;
+  /** Draw color per satellite, as an index into `colors`. */
+  readonly colorIndex: Uint8Array;
+  /** Orbit-class colors, then one per constellation. */
+  readonly colors: readonly string[];
   readonly generatedAt: string;
 
   /** Earth-relative x/y/z (km, ecliptic), each as of `computedAt`. */
@@ -100,6 +92,8 @@ export class SatellitePopulation {
   private readonly basis: Float64Array;
   private readonly basisTime: Float64Array;
   private readonly orientationRate: Float64Array;
+  private lastUpdate = Number.NaN;
+  private frameCount = 0;
 
   constructor(file: SatelliteFile) {
     const records = file.satellites;
@@ -107,9 +101,12 @@ export class SatellitePopulation {
     this.count = count;
     this.generatedAt = file.generatedAt;
     this.constellations = file.constellations;
-    this.names = records.map((record) => record.name);
+    this.names = records.map((record) => record[1]);
     this.noradIds = new Uint32Array(count);
     this.categoryIndex = new Uint8Array(count);
+    this.constellationIndex = new Int16Array(count);
+    this.colorIndex = new Uint8Array(count);
+    this.colors = [...CATEGORIES.map((category) => SATELLITE_CATEGORY_COLORS[category]), ...this.constellations.map((c) => c.color)];
     this.x = new Float64Array(count);
     this.y = new Float64Array(count);
     this.z = new Float64Array(count);
@@ -133,27 +130,29 @@ export class SatellitePopulation {
     this.orientationRate = new Float64Array(count);
 
     records.forEach((record, index) => {
-      const { a, e } = record;
-      const i = record.i * DEG;
-      const n = record.n * DEG;
+      const [noradId, , a, e, inclination, Omega, omega, M0, meanMotion, epoch, category, constellation] = record;
+      const i = inclination * DEG;
+      const n = meanMotion * DEG;
       const p = a * (1 - e * e);
       const j2Factor = 1.5 * EARTH_J2 * (EARTH_EQUATORIAL_RADIUS_KM / p) ** 2 * n;
       const sinI = Math.sin(i);
-      this.noradIds[index] = record.noradId;
-      this.categoryIndex[index] = Math.max(0, CATEGORIES.indexOf(record.category));
+      this.noradIds[index] = noradId;
+      this.categoryIndex[index] = Math.max(0, CATEGORIES.indexOf(category));
+      this.constellationIndex[index] = constellation;
+      this.colorIndex[index] = constellation >= 0 ? CATEGORIES.length + constellation : this.categoryIndex[index];
       this.semiMajorAxis[index] = a;
       this.eccentricity[index] = e;
       this.inclination[index] = i;
       this.semiMinorAxis[index] = a * Math.sqrt(1 - e * e);
       this.cosI[index] = Math.cos(i);
       this.sinI[index] = sinI;
-      this.node0[index] = record.Omega * DEG;
+      this.node0[index] = Omega * DEG;
       this.nodeRate[index] = -j2Factor * Math.cos(i);
-      this.argPeri0[index] = record.omega * DEG;
+      this.argPeri0[index] = omega * DEG;
       this.argPeriRate[index] = j2Factor * (2 - 2.5 * sinI * sinI);
-      this.meanAnomaly0[index] = record.M0 * DEG;
+      this.meanAnomaly0[index] = M0 * DEG;
       this.meanMotion[index] = n;
-      this.epoch[index] = utcJulianToTdb(record.epoch);
+      this.epoch[index] = utcJulianToTdb(epoch);
       this.orientationRate[index] = Math.abs(this.nodeRate[index]) + Math.abs(this.argPeriRate[index]);
       this.speed[index] = n * a * Math.sqrt((1 + e) / (1 - e));
     });
@@ -166,7 +165,12 @@ export class SatellitePopulation {
   }
 
   colorOf(index: number): string {
-    return SATELLITE_CATEGORY_COLORS[this.categories[this.categoryIndex[index]]];
+    return this.colors[this.colorIndex[index]];
+  }
+
+  constellationOf(index: number): string | null {
+    const constellation = this.constellationIndex[index];
+    return constellation >= 0 ? this.constellations[constellation].name : null;
   }
 
   categoryOf(index: number): SatelliteCategory {
@@ -176,13 +180,21 @@ export class SatellitePopulation {
   /** Refresh each Earth-relative position once it could have moved tolerancePx on screen. */
   update(t: number, zoom: number, tolerancePx = 0.5): void {
     const toleranceKm = tolerancePx / zoom;
-    const { basisTime, orientationRate, semiMajorAxis, computedAt, speed } = this;
+    const { basisTime, orientationRate, semiMajorAxis, computedAt, speed, meanMotion } = this;
+    // A satellite that moves more than an eighth of an orbit between frames
+    // is aliased: its dot jumps around the orbit rather than visibly moving
+    // along it. Those are refreshed a slice per frame, which looks the same.
+    const frameDt = Number.isNaN(this.lastUpdate) ? 0 : Math.abs(t - this.lastUpdate);
+    const aliasedMotion = Math.PI / 4 / frameDt;
+    const slice = this.frameCount++ % ALIASED_SLICES;
+    this.lastUpdate = t;
     for (let index = 0; index < this.count; index++) {
       if (Math.abs(t - computedAt[index]) * speed[index] < toleranceKm) continue;
+      if (meanMotion[index] > aliasedMotion && index % ALIASED_SLICES !== slice) continue;
       if (!(Math.abs(t - basisTime[index]) * orientationRate[index] * semiMajorAxis[index] < 0.4 * toleranceKm)) {
         this.orient(index, t);
       }
-      this.propagate(index, t, this.x, this.y, this.z, index);
+      this.propagate(index, t, this.x, this.y, this.z, index, toleranceKm);
       computedAt[index] = t;
     }
   }
@@ -193,7 +205,7 @@ export class SatellitePopulation {
     const y = [0];
     const z = [0];
     this.orient(index, t);
-    this.propagate(index, t, x, y, z, 0);
+    this.propagate(index, t, x, y, z, 0, 0);
     out[0] = x[0];
     out[1] = y[0];
     out[2] = z[0];
@@ -234,20 +246,32 @@ export class SatellitePopulation {
     outX: Float64Array | number[],
     outY: Float64Array | number[],
     outZ: Float64Array | number[],
-    outIndex: number
+    outIndex: number,
+    toleranceKm: number
   ): void {
     const dt = t - this.epoch[index];
     const e = this.eccentricity[index];
     let M = (this.meanAnomaly0[index] + this.meanMotion[index] * dt) % TWO_PI;
     if (M > Math.PI) M -= TWO_PI;
     else if (M < -Math.PI) M += TWO_PI;
-    let E = M + e * Math.sin(M);
-    for (let iteration = 0; iteration < 12; iteration++) {
-      const delta = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-      E -= delta;
-      if (delta < 1e-10 && delta > -1e-10) break;
+    // Solve Kepler's equation only as precisely as the screen can show
+    // (and to a meter regardless): E = M is within e·a, the first-order
+    // guess within e²·a/2 — for the near-circular orbits most satellites
+    // fly, both are usually far below a pixel.
+    const a = this.semiMajorAxis[index];
+    const precisionKm = Math.max(1e-3, 0.1 * toleranceKm);
+    let E = M;
+    if (e * a > precisionKm) {
+      E += e * Math.sin(M);
+      if (e * e * a > precisionKm) {
+        for (let iteration = 0; iteration < 12; iteration++) {
+          const delta = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+          E -= delta;
+          if (Math.abs(delta) * a < precisionKm) break;
+        }
+      }
     }
-    const xo = this.semiMajorAxis[index] * (Math.cos(E) - e);
+    const xo = a * (Math.cos(E) - e);
     const yo = this.semiMinorAxis[index] * Math.sin(E);
     const basis = this.basis;
     const offset = index * 6;

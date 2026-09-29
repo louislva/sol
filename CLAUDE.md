@@ -53,7 +53,7 @@ src/
 │   ├── world.ts              # Catalog + ephemeris + populations; Target type
 │   ├── clock.ts              # Simulation time and speed modes
 │   ├── asteroidPopulation.ts # 25k asteroids, structure-of-arrays
-│   └── satellitePopulation.ts# Earth satellites with J2 drift, constellation bands
+│   └── satellitePopulation.ts# All active Earth satellites, J2 drift
 ├── view/
 │   ├── camera.ts             # Camera in a moving reference frame
 │   ├── referenceFrame.ts     # Automatic reference-frame choice

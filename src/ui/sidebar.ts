@@ -182,7 +182,11 @@ function subtitle(target: Target, world: World): string {
       if (body.kind === "moon" && parent) return `Moon of ${parent.name}`;
       return KIND_LABELS[body.kind];
     }
-    case "satellite": return `Earth satellite · ${world.satellites!.categoryOf(target.index)}`;
+    case "satellite": {
+      const satellites = world.satellites!;
+      const constellation = satellites.constellationOf(target.index);
+      return `Earth satellite · ${constellation ? `${constellation} · ` : ""}${satellites.categoryOf(target.index)}`;
+    }
     case "asteroid": return "Asteroid";
   }
 }

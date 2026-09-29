@@ -1,5 +1,5 @@
 /**
- * Draws one frame: asteroid cloud, orbits, constellation shells, bodies and
+ * Draws one frame: asteroid cloud, orbits, bodies and
  * rings, satellites, labels, and the scale bar — and records what was drawn
  * for hit testing.
  */
@@ -13,7 +13,6 @@ import { LabelLayer } from "./layers/labels";
 import { OrbitLayer } from "./layers/orbits";
 import {
   drawAsteroids,
-  drawConstellationBands,
   drawSatellites,
   satelliteDetailVisible,
 } from "./layers/populations";
@@ -124,19 +123,16 @@ export class Renderer {
     const showSatellites = world.satellites !== null
       && this.projected[earth.index] === 1
       && satelliteDetailVisible(camera);
-    if (showSatellites) {
-      drawConstellationBands(ctx, world.satellites!, camera, this.screenX[earth.index], this.screenY[earth.index]);
-    }
-
     profiler.measure("bodies", () => this.drawBodies(world, camera, state, frameMs));
 
     if (showSatellites) {
       const highlight = [state.hovered, state.selected].find((target) => target?.type === "satellite");
+      const satellites = world.satellites!;
+      profiler.measure("satellite motion", () => satellites.update(world.time, camera.zoom));
       profiler.measure("satellites", () => drawSatellites(
         ctx,
-        world.satellites!,
+        satellites,
         camera,
-        world.time,
         this.screenX[earth.index],
         this.screenY[earth.index],
         (earth.radius ?? 0) * camera.zoom,

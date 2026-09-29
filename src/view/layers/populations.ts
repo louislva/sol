@@ -6,7 +6,7 @@
  */
 
 import { AU_KM } from "../../astro/constants";
-import { ASTEROID_POPULATION_COLOR, SATELLITE_CATEGORY_COLORS } from "../../data/palette";
+import { ASTEROID_POPULATION_COLOR } from "../../data/palette";
 import type { AsteroidPopulation } from "../../model/asteroidPopulation";
 import type { SatellitePopulation } from "../../model/satellitePopulation";
 import type { Camera } from "../camera";
@@ -14,6 +14,8 @@ import type { PickBuffer } from "../picking";
 
 const ASTEROID_DOT_RADIUS = 1.5;
 const SATELLITE_DOT_RADIUS = 2;
+/** Constellation members are thousands strong; smaller dots keep Earth visible through them. */
+const CONSTELLATION_DOT_RADIUS = 1;
 /** Square side with the same area as a circle of radius r. */
 const squareSide = (radius: number) => radius * Math.sqrt(Math.PI);
 
@@ -85,36 +87,6 @@ export function satelliteDetailVisible(camera: Camera): boolean {
   return SATELLITE_SYSTEM_RADIUS_KM * camera.zoom >= SATELLITE_DETAIL_MIN_PX;
 }
 
-/** Constellation shells as translucent annuli around Earth. */
-export function drawConstellationBands(
-  ctx: CanvasRenderingContext2D,
-  population: SatellitePopulation,
-  camera: Camera,
-  earthX: number,
-  earthY: number
-): void {
-  const viewRadius = Math.hypot(camera.width, camera.height);
-  const distanceToCenter = Math.hypot(earthX - camera.width / 2, earthY - camera.height / 2);
-  for (const constellation of population.constellations) {
-    ctx.globalAlpha = Math.min(0.19, 0.055 + Math.log10(constellation.count + 1) * 0.035);
-    ctx.fillStyle = constellation.color;
-    ctx.beginPath();
-    for (const band of constellation.bands) {
-      const widthPx = Math.max(1.25, (band.outerRadiusKm - band.innerRadiusKm) * camera.zoom);
-      const meanPx = band.meanRadiusKm * camera.zoom;
-      const outer = meanPx + widthPx / 2;
-      const inner = Math.max(0, meanPx - widthPx / 2);
-      if (distanceToCenter - outer > viewRadius || distanceToCenter + viewRadius < inner) continue;
-      ctx.moveTo(earthX + outer, earthY);
-      ctx.arc(earthX, earthY, outer, 0, Math.PI * 2);
-      ctx.moveTo(earthX + inner, earthY);
-      ctx.arc(earthX, earthY, inner, 0, Math.PI * 2, true);
-    }
-    ctx.fill("evenodd");
-  }
-  ctx.globalAlpha = 1;
-}
-
 /**
  * Satellite dots. Those behind Earth's disc (farther from the viewer) are
  * hidden; those in front are drawn over it.
@@ -124,23 +96,22 @@ export function drawSatellites(
   ctx: CanvasRenderingContext2D,
   population: SatellitePopulation,
   camera: Camera,
-  t: number,
   earthX: number,
   earthY: number,
   earthRadiusPx: number,
   picks: PickBuffer,
   highlight: number
 ): void {
-  population.update(t, camera.zoom);
   const { x: xs, y: ys, z: zs } = population;
   const zoom = camera.zoom;
-  const side = squareSide(SATELLITE_DOT_RADIUS);
-  const half = side / 2;
+  const firstConstellationColor = population.categories.length;
+  const sides = population.colors.map((_, colorIndex) => squareSide(colorIndex < firstConstellationColor ? SATELLITE_DOT_RADIUS : CONSTELLATION_DOT_RADIUS));
+  const half = squareSide(SATELLITE_DOT_RADIUS) / 2;
   const width = camera.width;
   const height = camera.height;
   const radiusSquared = earthRadiusPx * earthRadiusPx;
 
-  const paths = population.categories.map(() => new Path2D());
+  const paths = population.colors.map(() => new Path2D());
   let highlightX = Number.NaN;
   let highlightY = Number.NaN;
   for (let index = 0; index < population.count; index++) {
@@ -154,14 +125,16 @@ export function drawSatellites(
       highlightX = x;
       highlightY = y;
     }
-    paths[population.categoryIndex[index]].rect(x - half, y - half, side, side);
+    const colorIndex = population.colorIndex[index];
+    const side = sides[colorIndex];
+    paths[colorIndex].rect(x - side / 2, y - side / 2, side, side);
     picks.addDot("satellite", index, x, y);
   }
 
   ctx.globalAlpha = 0.9;
-  population.categories.forEach((category, categoryIndex) => {
-    ctx.fillStyle = SATELLITE_CATEGORY_COLORS[category];
-    ctx.fill(paths[categoryIndex]);
+  population.colors.forEach((color, colorIndex) => {
+    ctx.fillStyle = color;
+    ctx.fill(paths[colorIndex]);
   });
   ctx.globalAlpha = 1;
 
