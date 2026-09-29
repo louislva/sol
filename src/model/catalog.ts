@@ -421,18 +421,21 @@ export class Catalog {
    * ephemerides (public/data/ephemerides.json) within their span.
    */
   applyEphemerides(file: EphemerisFile): void {
-    const bodyFor = (name: string) => this.get(name === "Pluto" ? "Pluto Barycenter" : name);
-    const apply = (name: string, series: EphemerisSeries) => {
-      const body = bodyFor(name);
-      if (!body || series.rows.length < 2) return;
-      const motion = seriesMotion(series);
-      const start = series.start;
-      const end = series.start + series.step * (series.rows.length - 1);
-      // The existing model stays in effect before and after the span.
-      body.segments = spliceSegment(body.segments, { start, end, parent: segmentAt(body, start).parent, motion });
-    };
-    for (const [name, series] of Object.entries(file.planets)) apply(name, series);
-    for (const [name, series] of Object.entries(file.smallBodies)) apply(name, series);
+    for (const [name, series] of Object.entries(file.planets)) this.applySeries(name, series);
+    for (const [name, series] of Object.entries(file.smallBodies)) this.applySeries(name, series);
+  }
+
+  /**
+   * Use an osculating-element series for a body within the series' span,
+   * relative to the body's existing parent there; the existing model stays
+   * in effect before and after.
+   */
+  applySeries(name: string, series: EphemerisSeries): void {
+    const body = this.get(name === "Pluto" ? "Pluto Barycenter" : name);
+    if (!body || series.rows.length < 2) return;
+    const start = series.start;
+    const end = series.start + series.step * (series.rows.length - 1);
+    body.segments = spliceSegment(body.segments, { start, end, parent: segmentAt(body, start).parent, motion: seriesMotion(series) });
   }
 
   /** JPL Horizons osculating elements for spacecraft. */

@@ -10,7 +10,7 @@ import { AU_KM } from "./astro/constants";
 import { type Body, type MoonCategory, orbitAt, segmentAt } from "./model/body";
 import { Clock, type SpeedMode } from "./model/clock";
 import { AsteroidPopulation } from "./model/asteroidPopulation";
-import type { EphemerisFile } from "./model/catalog";
+import type { EphemerisFile, EphemerisSeries } from "./model/catalog";
 import { SatellitePopulation } from "./model/satellitePopulation";
 import { sameTarget, type Target, World } from "./model/world";
 import { Controls, formatRate } from "./ui/controls";
@@ -357,7 +357,13 @@ export class App {
     fetch("/data/ephemerides.json")
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
       .then((file: EphemerisFile) => this.world.catalog.applyEphemerides(file))
-      .catch((error: unknown) => console.error("High-resolution ephemerides failed to load:", error));
+      .catch((error: unknown) => console.error("High-resolution ephemerides failed to load:", error))
+      // The Moon's series is large and matters mostly where spacecraft meet
+      // it, so it comes last.
+      .then(() => fetch("/data/moon.json"))
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
+      .then((file: { moon: EphemerisSeries }) => this.world.catalog.applySeries("Moon", file.moon))
+      .catch((error: unknown) => console.error("Lunar ephemeris failed to load:", error));
 
     // Named small bodies are already full bodies; keep them out of the cloud.
     const numbered = new Set<string>();

@@ -14,7 +14,11 @@
  *
  * Requires src/data/smallBodies.json (run fetch-small-bodies.ts first).
  *
- * Output: public/data/ephemerides.json
+ * The Moon gets its own file: geocentric elements every 2 days for 1957–2100
+ * (blending error ≲ 120 km, versus ~1° for the fitted mean orbit), used
+ * where spacecraft meet it.
+ *
+ * Output: public/data/ephemerides.json, public/data/moon.json
  *   { start, planets | smallBodies: { [name]: { step, start, rows } } }
  *   rows: [q (km), e, i, node, argPeri, M (deg), n (deg/day)] per epoch.
  *
@@ -30,6 +34,8 @@ const START = 2415020.5; // 1900-01-01 TDB
 const END = 2488069.5;   // 2100-01-01 TDB
 const PLANET_STEP = 30;
 const SMALL_BODY_STEP = 365;
+const MOON_START = 2435839.5; // 1957-01-01
+const MOON_STEP = 2;
 
 const PLANETS: Record<string, string> = {
   Mercury: "199",
@@ -48,7 +54,7 @@ interface Series {
   rows: number[][];
 }
 
-async function fetchSeries(command: string, start: number, end: number, step: number): Promise<Series> {
+async function fetchSeries(command: string, start: number, end: number, step: number, center = "500@10"): Promise<Series> {
   const url = new URL(HORIZONS_URL);
   for (const [key, value] of Object.entries({
     format: "text",
@@ -56,7 +62,7 @@ async function fetchSeries(command: string, start: number, end: number, step: nu
     OBJ_DATA: "NO",
     MAKE_EPHEM: "YES",
     EPHEM_TYPE: "ELEMENTS",
-    CENTER: "'500@10'",
+    CENTER: `'${center}'`,
     REF_PLANE: "ECLIPTIC",
     REF_SYSTEM: "ICRF",
     OUT_UNITS: "KM-D",
@@ -70,8 +76,8 @@ async function fetchSeries(command: string, start: number, end: number, step: nu
   const limit = horizonsCoverageLimit(text);
   if (limit && !text.includes("$$SOE")) {
     // Trim to whole steps inside the object's ephemeris coverage.
-    if (limit.side === "before") return fetchSeries(command, start + Math.ceil((limit.jd - start) / step) * step, end, step);
-    return fetchSeries(command, start, start + Math.floor((limit.jd - start) / step) * step, step);
+    if (limit.side === "before") return fetchSeries(command, start + Math.ceil((limit.jd - start) / step) * step, end, step, center);
+    return fetchSeries(command, start, start + Math.floor((limit.jd - start) / step) * step, step, center);
   }
 
   const header = text.match(/^\s*JDTDB,.*$/m)?.[0];
@@ -111,6 +117,21 @@ async function main(): Promise<void> {
     console.log(`${body.name}: ${small[body.name].rows.length} epochs`);
     await sleep(300);
   }
+
+  // Horizons caps rows per request; fetch the Moon in decades.
+  const moon: Series = { start: MOON_START, step: MOON_STEP, rows: [] };
+  for (let chunk = MOON_START; chunk < END; chunk += MOON_STEP * 2000) {
+    const part = await fetchSeries("301", chunk, Math.min(END, chunk + MOON_STEP * 1999), MOON_STEP, "500@399");
+    moon.rows.push(...part.rows);
+    await sleep(300);
+  }
+  console.log(`Moon: ${moon.rows.length} epochs`);
+  writeJson("public/data/moon.json", {
+    source: HORIZONS_URL,
+    generatedAt: new Date().toISOString(),
+    note: "Osculating geocentric elements of the Moon, J2000 ecliptic. rows: [q km, e, i deg, node deg, argPeri deg, M deg, n deg/day] at start + k·step (JD TDB).",
+    moon,
+  });
 
   writeJson("public/data/ephemerides.json", {
     source: HORIZONS_URL,
