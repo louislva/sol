@@ -12,10 +12,12 @@
     "data:planets": "node scripts/fetch-planets.ts",
     "data:moons": "node scripts/fetch-moons.ts",
     "data:small-bodies": "node scripts/fetch-small-bodies.ts",
+    "data:ephemerides": "node scripts/fetch-ephemerides.ts",
     "data:asteroids": "node scripts/fetch-asteroids.ts",
     "data:spacecraft": "node scripts/fetch-spacecraft.ts",
+    "data:missions": "node scripts/fetch-missions.ts",
     "data:satellites": "node scripts/fetch-satellites.ts",
-    "data:all": "npm run data:orientation && npm run data:planets && npm run data:moons && npm run data:small-bodies && npm run data:asteroids && npm run data:spacecraft && npm run data:satellites",
+    "data:all": "npm run data:orientation && npm run data:planets && npm run data:moons && npm run data:small-bodies && npm run data:ephemerides && npm run data:asteroids && npm run data:spacecraft && npm run data:missions && npm run data:satellites",
     "verify": "node scripts/verify-positions.ts"
   },
   "devDependencies": {

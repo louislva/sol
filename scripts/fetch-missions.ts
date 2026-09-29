@@ -178,7 +178,7 @@ function stateToElements(r: number[], v: number[], mu: number): number[] {
   }
   const n = Math.sqrt(mu / Math.abs(a) ** 3);
   const deg = 180 / Math.PI;
-  return [sig(Math.abs(a * (1 - e)), 12), sig(e, 12), sig(i * deg, 12), sig(node * deg, 12), sig(argPeri * deg, 12), sig(M * deg, 12), sig(n * deg, 12)];
+  return [sig(Math.abs(a * (1 - e)), 11), sig(e, 11), sig(i * deg, 11), sig(node * deg, 11), sig(argPeri * deg, 11), sig(M * deg, 11), sig(n * deg, 11)];
 }
 
 // ── Pipeline ────────────────────────────────────────────────────────────
@@ -287,11 +287,24 @@ function flagWindows(craft: StateTable, parents: Array<CandidateBody | null>, bo
   return merged;
 }
 
-/** Sample the spacecraft and the given bodies on a grid and assign parents. */
+/**
+ * Sample the spacecraft and the given bodies on a grid (always including the
+ * end, which rarely falls on a grid step) and assign parents.
+ */
 async function scanGrid(command: string, bodies: CandidateBody[], start: number, end: number, stepMinutes: number) {
-  const craft = await vectorGrid(command, "500@10", start, end, stepMinutes);
+  const withEnd = async (target: string): Promise<StateTable> => {
+    const table = await vectorGrid(target, "500@10", start, end, stepMinutes);
+    if (end - table.jd[table.jd.length - 1] > MINUTE) {
+      const last = await vectorsAt(target, "500@10", [end]);
+      table.jd.push(...last.jd);
+      table.position.push(...last.position);
+      table.velocity.push(...last.velocity);
+    }
+    return table;
+  };
+  const craft = await withEnd(command);
   const tables = new Map<string, StateTable>();
-  for (const body of bodies) tables.set(body.name, await vectorGrid(body.command, "500@10", start, end, stepMinutes));
+  for (const body of bodies) tables.set(body.name, await withEnd(body.command));
   const parents = assignParents(craft, bodies, tables, exactIndex);
   return { craft, tables, parents };
 }
@@ -453,7 +466,9 @@ async function sampleSegment(config: MissionConfig, plan: SegmentPlan, parentGm:
       // enough to follow the orbit's evolution, not its motion.
       return Math.max(1 / 24, Math.min(5, 20 * period));
     }
-    return Math.max(MINUTE, Math.min(1, 0.1 * crossing));
+    // Unbound (a flyby): the conic describes the pass almost exactly, so
+    // samples only need to follow its slow evolution.
+    return Math.max(MINUTE, Math.min(1, 0.5 * crossing));
   };
 
   const epochs: number[] = [];
@@ -465,7 +480,7 @@ async function sampleSegment(config: MissionConfig, plan: SegmentPlan, parentGm:
     const position = table.position[index];
     const velocity = table.velocity[index].map((value) => value * DAY_S);
     rows.push(hermite
-      ? [...position.map((value) => sig(value, 12)), ...velocity.map((value) => sig(value, 12))]
+      ? [...position.map((value) => sig(value, 11)), ...velocity.map((value) => sig(value, 11))]
       : stateToElements(position, velocity, mu));
   };
 

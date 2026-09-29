@@ -62,10 +62,10 @@ export function installConsoleApi(app: App): void {
       app.follow(target);
       return `Following ${world.name(target)}`;
     },
-    watch(name: string) {
+    async watch(name: string) {
       const target = resolve(name);
       if (target?.type !== "body" || !target.body.mission) return `"${name}" is not a spacecraft mission.`;
-      app.watchFromLaunch(target.body);
+      await app.watchFromLaunch(target.body);
       return `Watching ${target.body.name} from launch (${clock.format()})`;
     },
     unfollow() {

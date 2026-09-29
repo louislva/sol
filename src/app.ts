@@ -32,6 +32,7 @@ const MAX_PIXEL_RATIO = 2;
 const FOLLOW_PACE_PX_PER_SECOND = 40;
 /** Fastest auto speed (simulated seconds per second): five years per second. */
 const MAX_AUTO_RATE = 5 * 31_557_600;
+const MAX_TRAJECTORY_LOADS = 3;
 
 export class App {
   readonly world = new World();
@@ -59,6 +60,7 @@ export class App {
   private lastUiMs = 0;
   private lastFrameMs = performance.now();
   private readonly scratch = new Float64Array(3);
+  private readonly missionBodies: Body[];
   private readonly viewState: ViewState = {
     hovered: null,
     selected: null,
@@ -72,19 +74,20 @@ export class App {
     this.renderer = new Renderer(canvas, this.world);
     this.frames = new ReferenceFrameSelector(this.world, (body) => this.isShown(body));
     this.autoFrame = this.world.earth;
+    this.missionBodies = this.world.bodies.filter((body) => body.mission?.trajectoryFile);
     this.frameTarget = { type: "body", body: this.autoFrame };
 
     this.sidebar = new Sidebar({
       close: () => this.select(null),
       toggleFollow: (target) => (sameTarget(this.followed, target) ? this.unfollow() : this.follow(target)),
-      watchFromLaunch: (body) => this.watchFromLaunch(body),
+      watchFromLaunch: (body) => void this.watchFromLaunch(body),
     });
     this.controls = new Controls({
       speed: (mode) => this.setSpeed(mode),
       moons: (category) => this.setMoonCategory(category),
       mission: (name) => {
         const body = this.world.catalog.get(name);
-        if (body) this.watchFromLaunch(body);
+        if (body) void this.watchFromLaunch(body);
       },
     });
     this.controls.setMissions(this.world.bodies
@@ -139,6 +142,7 @@ export class App {
     if (now - this.lastUiMs >= UI_REFRESH_MS) {
       this.lastUiMs = now;
       profiler.measure("ui", () => this.refreshUi());
+      this.requestTrajectories();
     }
     profiler.endFrame();
   }
@@ -302,9 +306,10 @@ export class App {
   }
 
   /** Rewind to a mission's launch and ride along with the spacecraft. */
-  watchFromLaunch(body: Body): void {
+  async watchFromLaunch(body: Body): Promise<void> {
     const launch = body.mission?.launch;
     if (launch === undefined) return;
+    if (body.mission?.trajectoryFile) await this.loadTrajectory(body);
     this.setJulianDate(Math.max(launch, body.existsFrom) + 1 / 1440);
     this.setSpeed("auto");
     this.follow({ type: "body", body });
@@ -425,21 +430,56 @@ export class App {
     camera.setView(0, 0, zoom);
   }
 
-  /** Full mission trajectories, a few at a time, in the background. */
-  private async loadMissionTrajectories(): Promise<void> {
-    const pending = this.world.bodies.filter((body) => body.mission?.trajectoryFile);
-    const worker = async () => {
-      for (let body = pending.shift(); body; body = pending.shift()) {
+  /**
+   * Mission trajectories are loaded when they matter: when the mission spans
+   * the current date, or its spacecraft is looked at. A few at a time.
+   */
+  private readonly trajectories = new Map<Body, Promise<void>>();
+  private readonly trajectoryQueue: Array<() => void> = [];
+  private activeTrajectoryLoads = 0;
+
+  private loadTrajectory(body: Body): Promise<void> {
+    let pending = this.trajectories.get(body);
+    if (!pending) {
+      pending = this.acquireLoadSlot().then(async () => {
         try {
           const response = await fetch(`/${body.mission!.trajectoryFile}`);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           this.world.catalog.applyMission(body, await response.json() as MissionFile);
         } catch (error) {
           console.warn(`Trajectory for ${body.name} failed to load:`, error);
+        } finally {
+          this.activeTrajectoryLoads--;
+          this.trajectoryQueue.shift()?.();
         }
-      }
-    };
-    await Promise.all([worker(), worker(), worker(), worker()]);
+      });
+      this.trajectories.set(body, pending);
+    }
+    return pending;
+  }
+
+  private acquireLoadSlot(): Promise<void> {
+    return new Promise((resolve) => {
+      const start = () => {
+        this.activeTrajectoryLoads++;
+        resolve();
+      };
+      if (this.activeTrajectoryLoads < MAX_TRAJECTORY_LOADS) start();
+      else this.trajectoryQueue.push(start);
+    });
+  }
+
+  /** Request the trajectories relevant to the current view and date. */
+  private requestTrajectories(): void {
+    const t = this.world.time;
+    const focus = [this.hovered?.target, this.selected, this.followed];
+    for (const body of this.missionBodies) {
+      if (this.trajectories.has(body)) continue;
+      const mission = body.mission!;
+      const spansNow = t >= mission.launch && t <= (mission.end ?? Number.POSITIVE_INFINITY);
+      const focused = focus.some((target) => target?.type === "body" && target.body === body);
+      if (spansNow || focused) void this.loadTrajectory(body);
+    }
   }
 
   /** Datasets fetched after startup: precise ephemerides and the point populations. */
@@ -469,7 +509,6 @@ export class App {
         console.log(`Loaded ${population.count.toLocaleString()} asteroids`);
       })
       .catch((error: unknown) => console.error("Asteroid catalog failed to load:", error));
-    this.loadMissionTrajectories();
     SatellitePopulation.load()
       .then((population) => {
         this.world.satellites = population;

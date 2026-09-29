@@ -27,6 +27,7 @@ npm run build      # Type check + production build
 npm run typecheck  # Type check app and data scripts
 npm run verify     # Compare computed positions with JPL Horizons
 npm run data:all   # Regenerate every data file (see scripts/README.md)
+npm run data:missions -- "Voyager 2"   # Regenerate one mission's trajectory
 ```
 
 ## Visual Design
@@ -92,6 +93,19 @@ much larger than that region — Earth when looking at satellites, Jupiter for
 the Galilean moons, the Sun for the planets. `Follow` (sidebar button,
 double-click, or `sol.follow`) locks the frame to any object; Esc releases.
 
+### Spacecraft missions
+Each spacecraft's full Horizons trajectory (`scripts/fetch-missions.ts`,
+loaded at runtime from `public/data/missions/`) is a timeline of segments
+relative to the body it is near: Earth at launch, the Sun in cruise, a planet
+or moon during a flyby, an asteroid in proximity operations. Segments use
+`keplerSeries` (element-space interpolation) where gravity dominates, `hermite`
+states near small bodies, and `surface` once landed (site from the ephemeris,
+rotating with the IAU model; a small figure stands beside the lander).
+Focused spacecraft draw their flown path in the frame of the body they are
+near — Voyager's hyperbola around Jupiter, not a heliocentric smear. "Watch
+from launch" (sidebar, Missions menu, `sol.watch`) rewinds and follows, with
+auto speed pacing the spacecraft's motion (slow motion at flybys).
+
 ### True scale with minimum size
 Bodies are drawn at true size, clamped to a minimum on-screen radius per kind
 (Sun 20px, planets 4px, dwarfs/moons 3px, asteroids/comets 2px, spacecraft
@@ -149,6 +163,7 @@ sol.getDate()              // Get current simulation date string
 sol.listBodies()           // List all body names (string[])
 sol.findBody("mars")       // Search bodies by name substring
 sol.getBody("Earth")       // Get body name, type, position (km and AU)
+sol.perf()                 // Mean ms per frame for each rendering phase
 sol.status()               // Camera center, zoom, date, speed, reference frame
 ```
 
