@@ -550,21 +550,24 @@ async function main(): Promise<void> {
     : [];
   const results = new Map(previous.map((mission) => [mission.name, mission]));
 
+  // The index is rewritten after each mission, so a long run can be
+  // interrupted and resumed (Horizons responses are cached).
+  const writeIndex = () => writeJson("src/data/missions.json", {
+    source: "JPL Horizons",
+    generatedAt: new Date().toISOString(),
+    missions: MISSIONS.map((config) => results.get(config.name)).filter(Boolean),
+  }, true);
   for (const config of MISSIONS) {
     if (only.length && !only.includes(config.name)) continue;
     console.log(`${config.name} (${config.spkid})`);
     try {
       results.set(config.name, await processMission(config));
+      writeIndex();
     } catch (error) {
       console.error(`  FAILED: ${String(error).slice(0, 300)}`);
     }
   }
-
-  writeJson("src/data/missions.json", {
-    source: "JPL Horizons",
-    generatedAt: new Date().toISOString(),
-    missions: MISSIONS.map((config) => results.get(config.name)).filter(Boolean),
-  }, true);
+  writeIndex();
 }
 
 main().catch((error: unknown) => {

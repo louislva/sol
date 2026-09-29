@@ -6,7 +6,7 @@
  * possibly switch reference frame → draw → update hover and the UI.
  */
 
-import { AU_KM } from "./astro/constants";
+import { AU_KM, julianToDate } from "./astro/constants";
 import { type Body, type MoonCategory, orbitAt, segmentAt } from "./model/body";
 import { Clock, type SpeedMode } from "./model/clock";
 import { AsteroidPopulation } from "./model/asteroidPopulation";
@@ -78,7 +78,20 @@ export class App {
     this.controls = new Controls({
       speed: (mode) => this.setSpeed(mode),
       moons: (category) => this.setMoonCategory(category),
+      mission: (name) => {
+        const body = this.world.catalog.get(name);
+        if (body) this.watchFromLaunch(body);
+      },
     });
+    this.controls.setMissions(this.world.bodies
+      .filter((body) => body.mission?.trajectoryFile)
+      .sort((a, b) => a.mission!.launch - b.mission!.launch)
+      .map((body) => {
+        const mission = body.mission!;
+        const year = julianToDate(mission.launch).getUTCFullYear();
+        const detail = mission.landing ? `landed on ${mission.landing.body}` : mission.status === "active" ? "active" : "ended";
+        return { name: body.name, detail: `${year} · ${detail}` };
+      }));
     this.controls.setMoonCategory(this.moonCategory);
     this.bindInput();
     this.observeSize();
