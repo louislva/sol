@@ -22,7 +22,7 @@ npm run data:moons        # or any single dataset
 | `fetch-asteroids.ts` | `public/data/asteroids.json` | JPL SBDB Query API: the 25,000 brightest asteroids by H |
 | `fetch-spacecraft.ts` | `src/data/spacecraft.json` | Horizons osculating elements for each mission (a quick stand-in until full trajectories load) |
 | `fetch-missions.ts` | `src/data/missions.json`, `public/data/missions/*.json` | Full Horizons trajectories, split by the body each spacecraft is near, and landing sites |
-| `fetch-ephemerides.ts` | `public/data/ephemerides.json` | Horizons osculating elements for planets (30-day) and named small bodies (yearly), 1900–2100 |
+| `fetch-ephemerides.ts` | `public/data/ephemerides.json`, `public/data/moon.json` | Horizons osculating elements: planets every 30 days and named small bodies yearly (1900–2100), the Moon every 2 days (1957–2100) |
 | `fetch-satellites.ts` | `public/data/satellites.json` | CelesTrak GP (OMM) elements, active satellites and constellation groups |
 
 `fetch-orientation.ts` must run before `fetch-moons.ts` and
@@ -34,8 +34,10 @@ npm run data:moons        # or any single dataset
   1900–2100 (`fetch-ephemerides.ts`), blended between samples: tens to
   hundreds of km from DE440. Bundled fallback and outside that span:
   Standish's mean elements, Table 1 where valid (1800–2050), Table 2
-  (3000 BC – 3000 AD, with the extra outer-planet terms) beyond. Earth moves about the Earth–Moon
-  barycenter opposite the Moon.
+  (3000 BC – 3000 AD, with the extra outer-planet terms) beyond.
+- **The Moon** — at runtime, geocentric osculating elements every 2 days for
+  1957–2100 (≲ 120 km); the fitted mean orbit below is the fallback. Earth
+  moves about the Earth–Moon barycenter opposite the Moon.
 - **Moons** — for each satellite, a precessing Keplerian orbit (constant
   a, e, i; linearly advancing mean longitude, periapsis and node) is
   least-squares fitted to Horizons positions in the satellite's reference
