@@ -38,6 +38,13 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* A value without a label (a note) spans the row. */
+#sidebar-content .sidebar-section > .sidebar-value:only-child {
+  max-width: 100%;
+  text-align: left;
+  line-height: 1.5;
+}
+
 #ui {
   position: fixed;
   bottom: 24px;

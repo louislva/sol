@@ -10,7 +10,7 @@ import { AU_KM } from "./astro/constants";
 import { type Body, type MoonCategory, orbitAt, segmentAt } from "./model/body";
 import { Clock, type SpeedMode } from "./model/clock";
 import { AsteroidPopulation } from "./model/asteroidPopulation";
-import type { EphemerisFile } from "./model/catalog";
+import type { EphemerisFile, MissionFile } from "./model/catalog";
 import { SatellitePopulation } from "./model/satellitePopulation";
 import { sameTarget, type Target, World } from "./model/world";
 import { Controls, formatRate } from "./ui/controls";
@@ -58,6 +58,8 @@ export class App {
   private readonly viewState: ViewState = {
     hovered: null,
     selected: null,
+    followed: null,
+    trailFrame: { type: "body", body: this.world.sun },
     isShown: (body) => this.isShown(body),
   };
 
@@ -71,6 +73,7 @@ export class App {
     this.sidebar = new Sidebar({
       close: () => this.select(null),
       toggleFollow: (target) => (sameTarget(this.followed, target) ? this.unfollow() : this.follow(target)),
+      watchFromLaunch: (body) => this.watchFromLaunch(body),
     });
     this.controls = new Controls({
       speed: (mode) => this.setSpeed(mode),
@@ -104,6 +107,8 @@ export class App {
 
     this.viewState.hovered = this.hovered?.target ?? null;
     this.viewState.selected = this.selected;
+    this.viewState.followed = this.followed;
+    this.viewState.trailFrame = { type: "body", body: this.autoFrame };
     profiler.measure("render", () => this.renderer.render(this.world, this.camera, this.viewState));
 
     if (this.pointer && (this.hoverDirty || now - this.lastHoverMs >= HOVER_REFRESH_MS)) {
@@ -138,10 +143,12 @@ export class App {
     this.world.position(this.frameTarget, this.scratch);
     this.camera.setOrigin(this.scratch[0], this.scratch[1]);
 
-    if (!this.followed) {
-      const chosen = this.frames.choose(this.world, this.camera, this.autoFrame);
-      if (chosen !== this.autoFrame) {
-        this.autoFrame = chosen;
+    // The automatic frame is tracked even while following: it is the
+    // context trails are drawn in (the Sun in cruise, Jupiter at Jupiter).
+    const chosen = this.frames.choose(this.world, this.camera, this.autoFrame);
+    if (chosen !== this.autoFrame) {
+      this.autoFrame = chosen;
+      if (!this.followed) {
         this.frameTarget = { type: "body", body: chosen };
         this.world.position(this.frameTarget, this.scratch);
         this.camera.changeOrigin(this.scratch[0], this.scratch[1]);
@@ -249,6 +256,25 @@ export class App {
     this.sidebar.update(this.world, true);
   }
 
+  /** Rewind to a mission's launch and ride along with the spacecraft. */
+  watchFromLaunch(body: Body): void {
+    const launch = body.mission?.launch;
+    if (launch === undefined) return;
+    this.setJulianDate(Math.max(launch, body.existsFrom) + 1 / 1440);
+    this.setSpeed("auto");
+    this.follow({ type: "body", body });
+    // Frame the spacecraft together with the body it is departing.
+    const parent = segmentAt(body, this.world.time).parent;
+    let reach = 60_000;
+    if (parent && parent.kind !== "star") {
+      const craft = [0, 0, 0];
+      this.world.position({ type: "body", body }, craft);
+      this.world.position({ type: "body", body: parent }, this.scratch);
+      reach = Math.max(reach, 1.3 * Math.hypot(craft[0] - this.scratch[0], craft[1] - this.scratch[1]));
+    }
+    this.camera.setZoomImmediately(Math.min(this.camera.width, this.camera.height) / 2 / reach);
+  }
+
   unfollow(): void {
     this.followed = null;
     if (this.selected) this.sidebar.update(this.world, false);
@@ -264,6 +290,18 @@ export class App {
 
   get frameName(): string {
     return this.world.name(this.frameTarget);
+  }
+
+  /** Jump to a date; positions and the camera's frame origin update immediately. */
+  setDate(date: Date): void {
+    this.setJulianDate(this.clock.julianDate + (date.getTime() - this.clock.date.getTime()) / 86_400_000);
+  }
+
+  private setJulianDate(jd: number): void {
+    this.clock.julianDate = jd;
+    this.world.setTime(jd);
+    this.world.position(this.frameTarget, this.scratch);
+    this.camera.setOrigin(this.scratch[0], this.scratch[1]);
   }
 
   setSpeed(mode: SpeedMode): void {
@@ -342,6 +380,23 @@ export class App {
     camera.setView(0, 0, zoom);
   }
 
+  /** Full mission trajectories, a few at a time, in the background. */
+  private async loadMissionTrajectories(): Promise<void> {
+    const pending = this.world.bodies.filter((body) => body.mission?.trajectoryFile);
+    const worker = async () => {
+      for (let body = pending.shift(); body; body = pending.shift()) {
+        try {
+          const response = await fetch(`/${body.mission!.trajectoryFile}`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          this.world.catalog.applyMission(body, await response.json() as MissionFile);
+        } catch (error) {
+          console.warn(`Trajectory for ${body.name} failed to load:`, error);
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  }
+
   /** Datasets fetched after startup: precise ephemerides and the point populations. */
   private loadRuntimeData(): void {
     // High-resolution planet and small-body ephemerides; the element tables
@@ -363,6 +418,7 @@ export class App {
         console.log(`Loaded ${population.count.toLocaleString()} asteroids`);
       })
       .catch((error: unknown) => console.error("Asteroid catalog failed to load:", error));
+    this.loadMissionTrajectories();
     SatellitePopulation.load()
       .then((population) => {
         this.world.satellites = population;

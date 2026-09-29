@@ -6,9 +6,18 @@
  * current simulation time are memoized in a flat typed array for the frame.
  */
 
+import { conicPosition } from "../astro/kepler";
+import { bodyFixedToEcliptic } from "../astro/orientation";
 import { type Body, type Motion, segmentAt, seriesIndex } from "./body";
 
 const seriesScratch = new Float64Array(3);
+const TWO_PI = Math.PI * 2;
+
+/** Signed smallest difference b − a of two angles (radians). */
+function angleDelta(a: number, b: number): number {
+  const delta = (b - a) % TWO_PI;
+  return delta > Math.PI ? delta - TWO_PI : delta < -Math.PI ? delta + TWO_PI : delta;
+}
 
 export class Ephemeris {
   readonly bodies: readonly Body[];
@@ -97,13 +106,69 @@ export function evaluateMotion(motion: Motion, t: number, out: Float64Array | nu
     case "keplerSeries": {
       const { epochs, orbits } = motion;
       const index = seriesIndex(epochs, t);
-      orbits[index].positionAt(t, out);
-      if (index === epochs.length - 1 || t <= epochs[0]) return;
+      if (index === epochs.length - 1 || t <= epochs[0]) {
+        orbits[index].positionAt(t, out);
+        return;
+      }
       const weight = (t - epochs[index]) / (epochs[index + 1] - epochs[index]);
+      const first = orbits[index].elements;
+      const second = orbits[index + 1].elements;
+      if (motion.blend === "elements" && (first.e < 1) === (second.e < 1)) {
+        // Interpolate the conic itself; the mean anomaly blends the two
+        // conics' predictions for time t, so it is continuous at the samples.
+        const m1 = first.meanAnomaly + first.meanMotion * (t - first.epoch);
+        const m2 = second.meanAnomaly + second.meanMotion * (t - second.epoch);
+        const closed = first.e < 1;
+        const lerp = (a: number, b: number) => a + (b - a) * weight;
+        const lerpAngle = (a: number, b: number) => a + angleDelta(a, b) * weight;
+        conicPosition(
+          lerp(first.a, second.a),
+          lerp(first.e, second.e),
+          lerp(first.i, second.i),
+          lerpAngle(first.node, second.node),
+          lerpAngle(first.argPeri, second.argPeri),
+          closed ? lerpAngle(m1, m2) : lerp(m1, m2),
+          out
+        );
+        return;
+      }
+      orbits[index].positionAt(t, out);
       orbits[index + 1].positionAt(t, seriesScratch);
       out[0] += (seriesScratch[0] - out[0]) * weight;
       out[1] += (seriesScratch[1] - out[1]) * weight;
       out[2] += (seriesScratch[2] - out[2]) * weight;
+      return;
+    }
+    case "hermite": {
+      const { epochs, states } = motion;
+      const index = seriesIndex(epochs, t);
+      const base = index * 6;
+      if (index === epochs.length - 1 || t <= epochs[0]) {
+        out[0] = states[base];
+        out[1] = states[base + 1];
+        out[2] = states[base + 2];
+        return;
+      }
+      const h = epochs[index + 1] - epochs[index];
+      const s = (t - epochs[index]) / h;
+      const s2 = s * s;
+      const s3 = s2 * s;
+      const h00 = 2 * s3 - 3 * s2 + 1;
+      const h10 = (s3 - 2 * s2 + s) * h;
+      const h01 = -2 * s3 + 3 * s2;
+      const h11 = (s3 - s2) * h;
+      for (let axis = 0; axis < 3; axis++) {
+        out[axis] = h00 * states[base + axis] + h10 * states[base + 3 + axis]
+          + h01 * states[base + 6 + axis] + h11 * states[base + 9 + axis];
+      }
+      return;
+    }
+    case "surface": {
+      const m = bodyFixedToEcliptic(motion.orientation, t);
+      const [x, y, z] = motion.position;
+      out[0] = m[0] * x + m[1] * y + m[2] * z;
+      out[1] = m[3] * x + m[4] * y + m[5] * z;
+      out[2] = m[6] * x + m[7] * y + m[8] * z;
       return;
     }
     case "barycentric": {

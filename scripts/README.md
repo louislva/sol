@@ -20,7 +20,9 @@ npm run data:moons        # or any single dataset
 | `fetch-moons.ts` | `src/data/moons.json` | JPL satellite list and reference planes (`sats/elem`), physical parameters (`sats/phys_par`), Horizons state vectors |
 | `fetch-small-bodies.ts` | `src/data/smallBodies.json` | JPL SBDB (identity, size, discovery) and Horizons osculating elements, 1900–2100 |
 | `fetch-asteroids.ts` | `public/data/asteroids.json` | JPL SBDB Query API: the 25,000 brightest asteroids by H |
-| `fetch-spacecraft.ts` | `src/data/spacecraft.json` | Horizons osculating elements for each mission |
+| `fetch-spacecraft.ts` | `src/data/spacecraft.json` | Horizons osculating elements for each mission (a quick stand-in until full trajectories load) |
+| `fetch-missions.ts` | `src/data/missions.json`, `public/data/missions/*.json` | Full Horizons trajectories, split by the body each spacecraft is near, and landing sites |
+| `fetch-ephemerides.ts` | `public/data/ephemerides.json` | Horizons osculating elements for planets (30-day) and named small bodies (yearly), 1900–2100 |
 | `fetch-satellites.ts` | `public/data/satellites.json` | CelesTrak GP (OMM) elements, active satellites and constellation groups |
 
 `fetch-orientation.ts` must run before `fetch-moons.ts` and
@@ -28,9 +30,11 @@ npm run data:moons        # or any single dataset
 
 ## How each dataset is modeled
 
-- **Planets** — Standish's mean elements with secular rates. Table 1 is used
-  where it is valid (1800–2050); Table 2 (3000 BC – 3000 AD, with the extra
-  outer-planet terms) outside it. Earth moves about the Earth–Moon
+- **Planets** — at runtime, Horizons osculating elements every 30 days for
+  1900–2100 (`fetch-ephemerides.ts`), blended between samples: tens to
+  hundreds of km from DE440. Bundled fallback and outside that span:
+  Standish's mean elements, Table 1 where valid (1800–2050), Table 2
+  (3000 BC – 3000 AD, with the extra outer-planet terms) beyond. Earth moves about the Earth–Moon
   barycenter opposite the Moon.
 - **Moons** — for each satellite, a precessing Keplerian orbit (constant
   a, e, i; linearly advancing mean longitude, periapsis and node) is
@@ -45,10 +49,18 @@ npm run data:moons        # or any single dataset
 - **Asteroid cloud** — osculating elements at the SBDB epoch (two-body).
   Sorted by absolute magnitude so the app can draw the largest N as a level
   of detail.
-- **Spacecraft** — one osculating element set per mission, about the body it
-  orbits: at the time of the fetch for active missions, just before the end
-  date for ended ones. NAIF IDs are verified against the name Horizons
-  returns.
+- **Spacecraft** — full trajectories (`fetch-missions.ts`). The mission is
+  split into segments by the body the spacecraft is near: the deepest body
+  whose region (Laplace sphere of influence, at least 20 radii — 100 for small
+  bodies) contains it, with encounters shorter than the daily sampling found
+  by refining any interval the spacecraft could have crossed a region in.
+  Each segment is sampled adaptively relative to its body: osculating
+  elements where that body's gravity dominates (interpolated in element
+  space), Hermite states near small bodies. Landers end in a surface segment:
+  touchdown is the moment after which the body-fixed position (IAU rotation)
+  stops changing, and the site is read from the ephemeris. The index ships
+  with the app; trajectories load at runtime. Horizons responses are cached
+  in `scripts/.cache/` (gitignored), so reruns are quick.
 - **Earth satellites** — CelesTrak elements propagated with Keplerian motion
   plus J2 secular drift of the node and perigee.
 

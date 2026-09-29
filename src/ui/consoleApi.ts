@@ -14,6 +14,7 @@ Navigation:
   sol.goto("Earth")          Center on an object at a suitable zoom
   sol.follow("Voyager 1")    Lock the camera to an object (Esc releases)
   sol.unfollow()             Return to the automatic reference frame
+  sol.watch("Voyager 2")     Rewind to a mission's launch and follow it
   sol.pan(1, 0)              Pan by an offset in AU
   sol.panToAU(1, 0)          Center on a heliocentric position in AU
   sol.panTo(x, y)            Center on a heliocentric position in km
@@ -61,6 +62,12 @@ export function installConsoleApi(app: App): void {
       app.follow(target);
       return `Following ${world.name(target)}`;
     },
+    watch(name: string) {
+      const target = resolve(name);
+      if (target?.type !== "body" || !target.body.mission) return `"${name}" is not a spacecraft mission.`;
+      app.watchFromLaunch(target.body);
+      return `Watching ${target.body.name} from launch (${clock.format()})`;
+    },
     unfollow() {
       app.unfollow();
       return "Automatic reference frame";
@@ -90,7 +97,7 @@ export function installConsoleApi(app: App): void {
     setDate(text: string) {
       const date = new Date(text);
       if (Number.isNaN(date.getTime())) return `Invalid date "${text}"; use ISO format like "2024-01-15".`;
-      clock.setDate(date);
+      app.setDate(date);
       return `Date ${clock.format()}`;
     },
     setSpeed(mode: SpeedMode) {

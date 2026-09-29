@@ -30,6 +30,7 @@ const TARGETS: Array<{ name: string; command: string; parent?: string }> = [
   { name: "Pluto", command: "999" },
   { name: "Ceres", command: "DES=2000001;" },
   { name: "Halley", command: "DES=1P;CAP;NOFRAG" },
+  { name: "Eros", command: "DES=20000433;" },
   { name: "Moon", command: "301", parent: "Earth" },
   { name: "Phobos", command: "401", parent: "Mars" },
   { name: "Io", command: "501", parent: "Jupiter" },

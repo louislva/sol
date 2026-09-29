@@ -73,6 +73,28 @@ export class World {
     }
   }
 
+  /** Heliocentric x/y/z (km) of a target at an arbitrary time (not cached). */
+  positionAt(target: Target, t: number, out: Float64Array | number[]): void {
+    switch (target.type) {
+      case "body":
+        this.ephemeris.positionAt(target.body, t, out);
+        return;
+      case "asteroid":
+        this.asteroids!.positionAt(target.index, t, out);
+        out[2] = 0;
+        return;
+      case "satellite": {
+        this.satellites!.positionAt(target.index, t, this.scratch);
+        const earth = [0, 0, 0];
+        this.ephemeris.positionAt(this.earth, t, earth);
+        out[0] = this.scratch[0] + earth[0];
+        out[1] = this.scratch[1] + earth[1];
+        out[2] = this.scratch[2] + earth[2];
+        return;
+      }
+    }
+  }
+
   name(target: Target): string {
     switch (target.type) {
       case "body": return target.body.name;

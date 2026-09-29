@@ -4,10 +4,11 @@
  * for hit testing.
  */
 
+import { bodyFixedToEcliptic } from "../astro/orientation";
 import { type Body, type BodyKind, existsAt, orbitAt, segmentAt, visibleParentAt } from "../model/body";
 import { sameTarget, type Target, type World } from "../model/world";
 import type { Camera } from "./camera";
-import { drawSpacecraftIcon } from "./layers/icons";
+import { drawSpacecraftIcon, drawStickFigure } from "./layers/icons";
 import { LabelLayer } from "./layers/labels";
 import { OrbitLayer } from "./layers/orbits";
 import {
@@ -18,6 +19,7 @@ import {
 } from "./layers/populations";
 import { RingRenderer } from "./layers/rings";
 import { drawScaleBar } from "./layers/scaleBar";
+import { TrailLayer } from "./layers/trails";
 import { PickBuffer } from "./picking";
 import { profiler } from "./profiler";
 
@@ -44,6 +46,13 @@ const LABEL_FADE_END_PX = 20;
 /** Bodies within this margin (px) of the viewport are still processed. */
 const CULL_MARGIN_PX = 50;
 const SOL_LABEL_ZOOM = 0.0019;
+const TRAIL_ALPHA = 0.6;
+/** Named asteroids are labelled only in views smaller than this (km). */
+const ASTEROID_LABEL_VIEW_RADIUS_KM = 0.3 * 149_597_870.7;
+/** Opacity of a spacecraft behind the body it is next to (or standing on). */
+const SEEN_THROUGH_ALPHA = 0.35;
+/** Landed spacecraft get a figure once the body they stand on is this large (px radius). */
+const FIGURE_MIN_BODY_PX = 30;
 /** Discs larger than this (px) are drawn as the part that crosses the viewport. */
 const LARGE_DISC_PX = 20_000;
 const SOL_FADE_MS = 300;
@@ -51,6 +60,9 @@ const SOL_FADE_MS = 300;
 export interface ViewState {
   hovered: Target | null;
   selected: Target | null;
+  followed: Target | null;
+  /** The body whose frame spacecraft trails are drawn in. */
+  trailFrame: Target;
   /** Filter for bodies the user chose to hide (moon detail level). */
   isShown: (body: Body) => boolean;
 }
@@ -61,6 +73,7 @@ export class Renderer {
   private readonly orbits = new OrbitLayer();
   private readonly rings = new RingRenderer();
   private readonly labels = new LabelLayer();
+  private readonly trails = new TrailLayer();
   private readonly brightened = new Map<string, string>();
   private readonly bodyTargets: Target[];
 
@@ -105,6 +118,7 @@ export class Renderer {
       profiler.measure("asteroids", () => drawAsteroids(ctx, asteroids, camera, world.time, this.picks));
     }
     profiler.measure("orbits", () => this.drawOrbits(world, camera, state));
+    profiler.measure("trails", () => this.drawTrails(world, camera, state));
 
     const earth = world.earth;
     const showSatellites = world.satellites !== null
@@ -183,7 +197,9 @@ export class Renderer {
         if (parentTrueRadius >= MIN_RADIUS_PX[parent.kind]) {
           // Resolved disc: hidden only while actually behind the parent.
           const behind = eph.positions[offset + 2] < eph.positions[parent.index * 3 + 2];
-          if (behind && distance < parentTrueRadius) opacity = 0;
+          // Spacecraft stay faintly visible through the body, so a lander on
+          // the far side can still be found.
+          if (behind && distance < parentTrueRadius) opacity = body.kind === "spacecraft" ? SEEN_THROUGH_ALPHA : 0;
         } else {
           // Parent drawn at its minimum size: fade out as the body disappears into it.
           const fade = parent.kind === "star" ? PARENT_FADE_PX.star : PARENT_FADE_PX.other;
@@ -220,6 +236,18 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
+  /** Flown paths of the spacecraft being looked at. */
+  private drawTrails(world: World, camera: Camera, state: ViewState): void {
+    const shown = new Set<Body>();
+    for (const target of [state.followed, state.selected, state.hovered]) {
+      if (target?.type !== "body" || target.body.kind !== "spacecraft" || shown.has(target.body)) continue;
+      if (!this.projected[target.body.index]) continue;
+      shown.add(target.body);
+      this.trails.draw(this.ctx, world, camera, target.body, state.trailFrame, TRAIL_ALPHA);
+    }
+    this.trails.retain(shown);
+  }
+
   private drawBodies(world: World, camera: Camera, state: ViewState, frameMs: number): void {
     const ctx = this.ctx;
     const t = world.time;
@@ -239,10 +267,18 @@ export class Renderer {
         const color = hovered || selected ? this.brighten(body.color) : body.color;
         ctx.globalAlpha = opacity;
         if (body.kind === "spacecraft") {
-          drawSpacecraftIcon(ctx, body.mission?.icon ?? "probe", x, y, radius, color);
+          const segment = segmentAt(body, t);
+          const ground = segment.motion.kind === "surface" ? segment.parent : null;
+          if (ground && this.projected[ground.index] && (ground.radius ?? 0) * camera.zoom >= FIGURE_MIN_BODY_PX) {
+            this.drawLanded(ground, x, y, color);
+          } else {
+            drawSpacecraftIcon(ctx, body.mission?.icon ?? "probe", x, y, radius, color);
+          }
         } else {
           ctx.fillStyle = color;
-          traceDisc(ctx, x, y, radius, camera.width, camera.height);
+          if (!body.radii || !this.traceEllipsoid(body, x, y, camera.zoom, t)) {
+            traceDisc(ctx, x, y, radius, camera.width, camera.height);
+          }
           ctx.fill();
           if (body.kind !== "star" && radius < LARGE_DISC_PX) {
             ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
@@ -264,8 +300,11 @@ export class Renderer {
 
       if (body.kind === "star") this.drawSolLabel(camera, x, y, radius, frameMs);
 
-      // Label bodies drawn near their minimum size; larger discs speak for themselves.
-      if (radius <= MIN_RADIUS_PX[body.kind] * 1.5 || hovered || selected) {
+      // Label bodies drawn near their minimum size (larger discs speak for
+      // themselves). Individual asteroids only get one close up.
+      const labelled = hovered || selected || (radius <= MIN_RADIUS_PX[body.kind] * 1.5
+        && (body.kind !== "asteroid" || camera.viewRadius < ASTEROID_LABEL_VIEW_RADIUS_KM));
+      if (labelled) {
         this.labels.add(
           body.name,
           x,
@@ -277,7 +316,47 @@ export class Renderer {
     }
   }
 
+  /**
+   * Silhouette of a triaxial body: the orthographic projection of its
+   * ellipsoid, turning with the body. Returns false when too small to matter.
+   */
+  private traceEllipsoid(body: Body, x: number, y: number, zoom: number, t: number): boolean {
+    const [a, b, c] = body.radii!;
+    if (Math.max(a, b, c) * zoom < 3 || Math.max(a, b, c) * zoom > LARGE_DISC_PX) return false;
+    const m = bodyFixedToEcliptic(body.orientation!, t);
+    // Projected shape matrix: the xy block of M·diag(a², b², c²)·Mᵀ.
+    const d = [a * a, b * b, c * c];
+    const p = m[0] * m[0] * d[0] + m[1] * m[1] * d[1] + m[2] * m[2] * d[2];
+    const q = m[0] * m[3] * d[0] + m[1] * m[4] * d[1] + m[2] * m[5] * d[2];
+    const r = m[3] * m[3] * d[0] + m[4] * m[4] * d[1] + m[5] * m[5] * d[2];
+    const mean = (p + r) / 2;
+    const spread = Math.hypot((p - r) / 2, q);
+    const major = Math.sqrt(mean + spread) * zoom;
+    const minor = Math.sqrt(Math.max(0, mean - spread)) * zoom;
+    const angle = 0.5 * Math.atan2(2 * q, p - r);
+    this.ctx.beginPath();
+    this.ctx.ellipse(x, y, Math.max(major, MIN_RADIUS_PX[body.kind]), Math.max(minor, MIN_RADIUS_PX[body.kind]), angle, 0, Math.PI * 2);
+    return true;
+  }
+
+  /**
+   * A landed spacecraft on a resolved body: the lander with a little figure
+   * standing beside it, "up" pointing away from the body's center.
+   */
+  private drawLanded(ground: Body, x: number, y: number, color: string): void {
+    const centerX = this.screenX[ground.index];
+    const centerY = this.screenY[ground.index];
+    const offset = Math.hypot(x - centerX, y - centerY);
+    // Seen from above near the disc's center, "up" points at the viewer; stand upright.
+    const up = offset > 0.25 * this.radiusPx[ground.index] ? Math.atan2(y - centerY, x - centerX) : -Math.PI / 2;
+    const side = up + Math.PI / 2;
+    drawSpacecraftIcon(this.ctx, "lander", x, y, 6, color);
+    drawStickFigure(this.ctx, x + Math.cos(side) * 9, y + Math.sin(side) * 9, up, 16, "#ffffff");
+  }
+
   private labelAlpha(body: Body, x: number, y: number, t: number): number {
+    // A landed spacecraft is meant to be seen on its body.
+    if (segmentAt(body, t).motion.kind === "surface") return 1;
     const parent = visibleParentAt(body, t);
     if (!parent || !this.projected[parent.index]) return 1;
     const gap = Math.hypot(x - this.screenX[parent.index], y - this.screenY[parent.index]) - this.radiusPx[parent.index];

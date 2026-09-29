@@ -75,6 +75,41 @@ export function elementsFromPeriapsis(params: {
   };
 }
 
+/**
+ * Position (km, J2000 ecliptic) on the conic with the given elements, all
+ * angles in radians. For orbits whose elements are interpolated in time.
+ */
+export function conicPosition(
+  a: number,
+  e: number,
+  i: number,
+  node: number,
+  argPeri: number,
+  meanAnomaly: number,
+  out: Float64Array | number[]
+): void {
+  let x: number;
+  let y: number;
+  if (e < 1) {
+    const E = solveElliptic(meanAnomaly, e);
+    x = a * (Math.cos(E) - e);
+    y = a * Math.sqrt((1 - e) * (1 + e)) * Math.sin(E);
+  } else {
+    const H = solveHyperbolic(meanAnomaly, e);
+    x = -a * (e - Math.cosh(H));
+    y = -a * Math.sqrt((e - 1) * (e + 1)) * Math.sinh(H);
+  }
+  const cosO = Math.cos(node);
+  const sinO = Math.sin(node);
+  const cosW = Math.cos(argPeri);
+  const sinW = Math.sin(argPeri);
+  const cosI = Math.cos(i);
+  const sinI = Math.sin(i);
+  out[0] = (cosO * cosW - sinO * sinW * cosI) * x + (-cosO * sinW - sinO * cosW * cosI) * y;
+  out[1] = (sinO * cosW + cosO * sinW * cosI) * x + (-sinO * sinW + cosO * cosW * cosI) * y;
+  out[2] = sinW * sinI * x + cosW * sinI * y;
+}
+
 /** Solve Kepler's equation M = E − e·sin E for the eccentric anomaly. */
 export function solveElliptic(meanAnomaly: number, e: number): number {
   // Work in [−π, π] where the Danby starting guess converges in a few steps.

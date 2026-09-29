@@ -20,6 +20,7 @@ const MISSION_TYPES = {
   deep_space: "Deep space",
   earth_orbiter: "Earth orbiter",
   planetary_orbiter: "Planetary orbiter",
+  lander: "Lander / rover",
 } as const;
 
 type Row = [label: string, value: string, color?: string];
@@ -31,6 +32,8 @@ interface Section {
 export interface SidebarCallbacks {
   close(): void;
   toggleFollow(target: Target): void;
+  /** Jump to a mission's launch and follow the spacecraft. */
+  watchFromLaunch(body: Body): void;
 }
 
 export class Sidebar {
@@ -94,6 +97,12 @@ export class Sidebar {
     follow.classList.toggle("active", following);
     follow.addEventListener("click", () => this.callbacks.toggleFollow(target));
     content.append(follow);
+    if (target.type === "body" && target.body.mission?.trajectoryFile) {
+      const body = target.body;
+      const watch = element("button", "Watch from launch", "sidebar-follow");
+      watch.addEventListener("click", () => this.callbacks.watchFromLaunch(body));
+      content.append(watch);
+    }
 
     for (const section of sections) {
       if (section.rows.length === 0) continue;
@@ -228,7 +237,10 @@ function describeBody(body: Body, world: World, sunDistance: number, position: n
   const t = world.time;
   const segment = segmentAt(body, t);
   const parent = segment.parent;
-  const overview: Row[] = [["Radius", body.radius === null ? "unknown" : formatKm(body.radius)]];
+  const overview: Row[] = body.kind === "spacecraft"
+    ? []
+    : [["Radius", body.radius === null ? "unknown" : formatKm(body.radius)]];
+  if (body.radii) overview.push(["Dimensions", `${body.radii.map((value) => formatKm(2 * value).replace(" km", "")).join(" × ")} km`]);
   if (body.kind !== "star") overview.push(["Distance from Sun", formatDistance(sunDistance)]);
   if (parent && parent.kind !== "star" && parent.kind !== "barycenter") {
     const parentPosition = [0, 0, 0];
@@ -256,7 +268,7 @@ function describeBody(body: Body, world: World, sunDistance: number, position: n
       title: parent && parent.kind !== "star" && parent.kind !== "barycenter" ? `Orbit around ${parent.name}` : "Orbit",
       rows: [
         e < 1 ? ["Semi-major axis", heliocentric ? `${(a / AU_KM).toFixed(3)} AU` : formatKm(a)]
-          : ["Perihelion", heliocentric ? `${(orbit.periapsis / AU_KM).toFixed(3)} AU` : formatKm(orbit.periapsis)],
+          : [heliocentric ? "Perihelion" : "Periapsis", heliocentric ? `${(orbit.periapsis / AU_KM).toFixed(3)} AU` : formatKm(orbit.periapsis)],
         ["Eccentricity", e.toFixed(4)],
         ["Inclination", `${(orbit.elements.i / DEG).toFixed(2)}°${body.kind === "moon" ? " (to reference plane)" : ""}`],
         ["Period", e < 1 ? formatDuration(orbit.period) : "unbound (hyperbolic)"],
@@ -273,9 +285,14 @@ function describeBody(body: Body, world: World, sunDistance: number, position: n
         ["Mission type", MISSION_TYPES[mission.type]],
         ["Launch", formatDate(mission.launch)],
         ...(mission.end ? [["End", formatDate(mission.end)] as Row] : []),
+        ...(mission.landing ? [
+          ["Landed", `${formatDate(mission.landing.time)} on ${mission.landing.body}`] as Row,
+          ["Site", formatSite(mission.landing.latitude, mission.landing.longitude)] as Row,
+        ] : []),
         ["NAIF ID", String(mission.spkid)],
       ],
     });
+    if (mission.fate) sections.push({ rows: [["", mission.fate, "#aaaaaa"]] });
   }
 
   const dataRows: Row[] = [["Source", body.dataSource]];
@@ -306,6 +323,11 @@ function formatDuration(days: number): string {
 
 function formatDate(jd: number): string {
   return julianToDate(jd).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function formatSite(latitude: number, longitude: number): string {
+  const east = ((longitude % 360) + 360) % 360;
+  return `${Math.abs(latitude).toFixed(3)}° ${latitude < 0 ? "S" : "N"}, ${east.toFixed(3)}° E`;
 }
 
 function capitalize(text: string): string {

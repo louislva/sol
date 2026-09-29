@@ -125,6 +125,7 @@ The app exposes a `window.sol` object for programmatic control via the browser c
 sol.goto("Earth")          // Center camera on a body (auto-zooms by type)
 sol.follow("ISS (ZARYA)")  // Lock the camera frame to an object
 sol.unfollow()             // Back to the automatic reference frame
+sol.watch("Voyager 2")     // Rewind to a mission's launch and follow it
 sol.pan(1, 0)              // Pan by offset in AU
 sol.panToAU(1, 0)          // Pan to absolute position in AU
 sol.panTo(x, y)            // Pan to absolute position in km

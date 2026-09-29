@@ -22,9 +22,10 @@ import moonData from "../data/moons.json";
 import moonDiscovery from "../data/moonDiscovery.json";
 import smallBodyData from "../data/smallBodies.json";
 import spacecraftData from "../data/spacecraft.json";
+import missionData from "../data/missions.json";
 import orientationData from "../data/orientation.json";
 import type { OrientationModel } from "../astro/orientation";
-import { type Body, type BodyKind, type Discovery, type MoonCategory, type Motion, type MotionSegment, orbitAt, segmentAt, spliceSegment } from "./body";
+import { type Body, type BodyKind, type Discovery, type MissionInfo, type MoonCategory, type Motion, type MotionSegment, orbitAt, segmentAt, spliceSegment } from "./body";
 
 
 type OrientationRecord = Partial<Omit<OrientationModel, "angles">> & {
@@ -86,6 +87,40 @@ const LABEL_PRIORITY: Record<BodyKind, number> = {
   asteroid: 6,
 };
 
+interface Landing {
+  body: string;
+  time: number;
+  /** Body-fixed position (km). */
+  position: [number, number, number];
+  latitude: number;
+  longitude: number;
+}
+
+interface MissionIndexEntry {
+  name: string;
+  spkid: number;
+  type: string;
+  icon: string;
+  status: string;
+  fate?: string;
+  start: number;
+  end: number | null;
+  landing: Landing | null;
+  file: string;
+}
+
+export interface MissionFile {
+  segments: Array<{
+    start: number;
+    end: number;
+    parent: string;
+    motion: "keplerSeries" | "hermite";
+    epochs: number[];
+    rows: number[][];
+  }>;
+  landing: Landing | null;
+}
+
 export interface EphemerisSeries {
   start: number;
   step: number;
@@ -110,7 +145,7 @@ function seriesMotion(series: EphemerisSeries): Motion {
     node: node * DEG,
     argPeri: argPeri * DEG,
   })));
-  return { kind: "keplerSeries", epochs, orbits };
+  return { kind: "keplerSeries", blend: "position", epochs, orbits };
 }
 
 function formatFitError(km: number): string {
@@ -233,6 +268,12 @@ export class Catalog {
       dataSource: spec.dataSource ?? "",
       orbitSource: spec.orbitSource,
     };
+    // Draw irregular bodies with their triaxial shape (PCK radii), when the
+    // axes differ by more than a few percent and the orientation is known.
+    const radii = spec.naifId === undefined ? undefined : orientation[spec.naifId]?.radii;
+    if (radii && body.orientation && Math.max(...radii) > 1.05 * Math.min(...radii)) {
+      body.radii = [radii[0], radii[1], radii[2]];
+    }
     this.bodies.push(body);
     this.byName.set(body.name, body);
     return body;
@@ -348,6 +389,7 @@ export class Catalog {
     for (const entry of smallBodyData.bodies) {
       const motion: Motion = {
         kind: "keplerSeries",
+        blend: "position",
         epochs: Float64Array.from(entry.elements, (element) => element.epoch),
         orbits: entry.elements.map((element) => new KeplerOrbit(elementsFromPeriapsis({
           q: element.q,
@@ -435,41 +477,109 @@ export class Catalog {
     for (const [name, series] of Object.entries(file.smallBodies)) apply(name, series);
   }
 
-  /** JPL Horizons osculating elements for spacecraft. */
+  /**
+   * Spacecraft. Each mission's full trajectory (public/data/missions) is
+   * loaded at runtime and installed with `applyMission`; until then a single
+   * osculating conic stands in, and landers already sit at their sites.
+   */
   private addSpacecraft(): void {
-    for (const craft of spacecraftData.spacecraft) {
-      const el = craft.elements;
-      const orbit = new KeplerOrbit(elementsFromPeriapsis({
-        q: el.q,
-        e: el.e,
-        tp: el.tp,
-        meanMotion: el.n * DEG,
-        i: el.i * DEG,
-        node: el.node * DEG,
-        argPeri: el.argPeri * DEG,
-      }));
-      const status = craft.status as "active" | "ended";
+    const conics = new Map(spacecraftData.spacecraft.map((craft) => [craft.name, craft]));
+    const missions = new Map((missionData.missions as unknown as MissionIndexEntry[]).map((mission) => [mission.name, mission]));
+    for (const name of new Set([...missions.keys(), ...conics.keys()])) {
+      const mission = missions.get(name);
+      const conic = conics.get(name);
+      const segments: MotionSegment[] = [];
+      if (conic) {
+        const el = conic.elements;
+        const orbit = new KeplerOrbit(elementsFromPeriapsis({
+          q: el.q,
+          e: el.e,
+          tp: el.tp,
+          meanMotion: el.n * DEG,
+          i: el.i * DEG,
+          node: el.node * DEG,
+          argPeri: el.argPeri * DEG,
+        }));
+        segments.push({ start: Number.NEGATIVE_INFINITY, end: Number.POSITIVE_INFINITY, parent: this.require(conic.center), motion: { kind: "kepler", orbit } });
+      }
+      if (mission?.landing) {
+        const surface = this.surfaceSegment(mission.landing);
+        if (segments.length) segments[0].end = surface.start;
+        segments.push(surface);
+      }
+      if (segments.length === 0) continue;
+
+      const status = (mission?.status ?? conic!.status) as "active" | "ended";
+      const launch = mission?.start ?? conic!.launchJD;
+      const end = mission ? mission.end ?? undefined : conic!.endJD ?? undefined;
       this.add({
-        name: craft.name,
+        name,
         kind: "spacecraft",
         radius: null,
         color: SPACECRAFT_STATUS_COLORS[status],
-        motion: { kind: "kepler", orbit },
-        parent: this.require(craft.center),
-        existsFrom: craft.launchJD,
-        existsUntil: craft.endJD ?? Number.POSITIVE_INFINITY,
+        segments,
+        // A lander known only by its site appears once it has landed; the
+        // full trajectory extends this back to launch.
+        existsFrom: conic ? launch : mission!.landing!.time,
+        existsUntil: end ?? Number.POSITIVE_INFINITY,
         mission: {
-          spkid: craft.spkid,
-          type: craft.missionType as "deep_space" | "earth_orbiter" | "planetary_orbiter",
+          spkid: mission?.spkid ?? conic!.spkid,
+          type: (mission?.type ?? conic!.missionType) as MissionInfo["type"],
           status,
-          launch: craft.launchJD,
-          end: craft.endJD,
-          icon: craft.iconType as "probe" | "orbiter" | "telescope",
-          elementsEpoch: el.epoch,
+          launch,
+          end,
+          icon: (mission?.icon ?? conic!.iconType) as MissionInfo["icon"],
+          elementsEpoch: mission ? undefined : conic!.elements.epoch,
+          fate: mission?.fate,
+          landing: mission?.landing ?? undefined,
+          trajectoryFile: mission?.file,
         },
-        naifId: craft.spkid,
-        dataSource: "JPL Horizons osculating elements",
+        naifId: mission?.spkid ?? conic!.spkid,
+        dataSource: mission ? "JPL Horizons trajectory" : "JPL Horizons osculating elements",
       });
+    }
+  }
+
+  private surfaceSegment(landing: Landing): MotionSegment {
+    const body = this.require(landing.body);
+    if (!body.orientation) throw new Error(`No orientation model for ${body.name}`);
+    return {
+      start: landing.time,
+      end: Number.POSITIVE_INFINITY,
+      parent: body,
+      motion: { kind: "surface", position: landing.position, orientation: body.orientation },
+    };
+  }
+
+  /** Install a mission's full trajectory (public/data/missions/<name>.json). */
+  applyMission(body: Body, file: MissionFile): void {
+    const segments: MotionSegment[] = [];
+    for (const segment of file.segments) {
+      const parent = this.require(segment.parent);
+      const epochs = Float64Array.from(segment.epochs);
+      let motion: Motion;
+      if (segment.motion === "hermite") {
+        motion = { kind: "hermite", epochs, states: Float64Array.from(segment.rows.flat()) };
+      } else {
+        const orbits = segment.rows.map(([q, e, i, node, argPeri, M, n], index) => new KeplerOrbit(elementsFromPeriapsis({
+          q,
+          e,
+          tp: epochs[index] - M / n,
+          meanMotion: n * DEG,
+          i: i * DEG,
+          node: node * DEG,
+          argPeri: argPeri * DEG,
+        })));
+        motion = { kind: "keplerSeries", blend: "elements", epochs, orbits };
+      }
+      segments.push({ start: segment.start, end: segment.end, parent, motion });
+    }
+    if (file.landing) segments.push(this.surfaceSegment(file.landing));
+    if (segments.length === 0) return;
+    body.segments = segments;
+    body.existsFrom = segments[0].start;
+    for (const segment of segments) {
+      if (segment.parent && !segment.parent.children.includes(body)) segment.parent.children.push(body);
     }
   }
 

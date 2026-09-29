@@ -22,7 +22,7 @@ export type BodyKind =
   | "spacecraft";
 
 export type MoonCategory = "major" | "medium" | "named" | "minor";
-export type SpacecraftIcon = "probe" | "orbiter" | "telescope";
+export type SpacecraftIcon = "probe" | "orbiter" | "telescope" | "lander";
 
 export type Motion =
   /** At the parent's position (the Sun, or a body resting at a barycenter). */
@@ -34,7 +34,26 @@ export type Motion =
    * positions on the two bracketing conics are blended linearly in time, so
    * the path is exact at every sample and continuous between them.
    */
-  | { kind: "keplerSeries"; epochs: Float64Array; orbits: KeplerOrbit[] }
+  | {
+      kind: "keplerSeries";
+      epochs: Float64Array;
+      orbits: KeplerOrbit[];
+      /**
+       * "position": blend the positions on the two conics (planets, small
+       * bodies). "elements": interpolate the elements themselves, so the path
+       * stays on a conic — right for orbiters sampled less often than they
+       * revolve.
+       */
+      blend: "position" | "elements";
+    }
+  /**
+   * Sampled relative states (x, y, z km; vx, vy, vz km/day per epoch),
+   * cubic Hermite interpolation. For motion no conic describes well, such as
+   * station-keeping beside a small asteroid.
+   */
+  | { kind: "hermite"; epochs: Float64Array; states: Float64Array }
+  /** At rest on the parent's surface: a body-fixed position (km) turning with it. */
+  | { kind: "surface"; position: [number, number, number]; orientation: OrientationModel }
   /**
    * Reflex motion about a barycenter: position = −massRatio × (partner's
    * position relative to this body). Earth about the Earth–Moon barycenter.
@@ -67,13 +86,18 @@ export interface Discovery {
 
 export interface MissionInfo {
   spkid: number;
-  type: "deep_space" | "earth_orbiter" | "planetary_orbiter";
+  type: "deep_space" | "earth_orbiter" | "planetary_orbiter" | "lander";
   status: "active" | "ended";
   launch: number; // JD
   end?: number;   // JD
   icon: SpacecraftIcon;
-  /** Epoch of the osculating elements the trajectory is built from. */
+  /** Epoch of the osculating elements, when a single conic stands in for the trajectory. */
   elementsEpoch?: number;
+  /** How the mission ended, when it has. */
+  fate?: string;
+  landing?: { body: string; time: number; latitude: number; longitude: number };
+  /** Full trajectory data, loaded at runtime (path under public/). */
+  trajectoryFile?: string;
 }
 
 export interface Body {
@@ -111,6 +135,8 @@ export interface Body {
 
   /** IAU orientation of the body's pole and prime meridian. */
   orientation?: OrientationModel;
+  /** Triaxial radii (km) along the body-fixed x, y, z axes, for non-spherical bodies. */
+  radii?: [number, number, number];
   rings?: Ring[];
   moonCategory?: MoonCategory;
   mission?: MissionInfo;

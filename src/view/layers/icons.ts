@@ -15,7 +15,54 @@ export function drawSpacecraftIcon(
     case "telescope": return drawTelescope(ctx, x, y, size);
     case "orbiter": return drawOrbiter(ctx, x, y, size);
     case "probe": return drawProbe(ctx, x, y, size);
+    case "lander": return drawLander(ctx, x, y, size);
   }
+}
+
+/** Squat body on splayed legs (landers and rovers seen from above). */
+function drawLander(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  ctx.fillRect(x - s * 0.45, y - s * 0.35, s * 0.9, s * 0.6);
+  ctx.fillRect(x - s * 0.08, y - s * 0.8, s * 0.16, s * 0.45);
+  ctx.beginPath();
+  ctx.arc(x, y - s * 0.85, s * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, s * 0.12);
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.4, y + s * 0.2);
+  ctx.lineTo(x - s * 0.75, y + s * 0.7);
+  ctx.moveTo(x + s * 0.4, y + s * 0.2);
+  ctx.lineTo(x + s * 0.75, y + s * 0.7);
+  ctx.stroke();
+}
+
+/**
+ * A little figure standing on a surface: feet at (x, y), body along `angle`
+ * (the local "up", pointing away from the body it stands on).
+ */
+export function drawStickFigure(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, height: number, color: string): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle + Math.PI / 2);
+  const h = height;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, h * 0.09);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  // Legs, torso, arms (one raised in a wave).
+  ctx.moveTo(-h * 0.18, 0);
+  ctx.lineTo(0, -h * 0.4);
+  ctx.lineTo(h * 0.18, 0);
+  ctx.moveTo(0, -h * 0.4);
+  ctx.lineTo(0, -h * 0.75);
+  ctx.moveTo(-h * 0.22, -h * 0.55);
+  ctx.lineTo(0, -h * 0.68);
+  ctx.lineTo(h * 0.2, -h * 0.9);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, -h * 0.87, h * 0.12, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** Bus with two pairs of solar panels. */

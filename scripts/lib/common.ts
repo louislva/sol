@@ -21,7 +21,7 @@ export function sleep(milliseconds: number): Promise<void> {
 }
 
 /** GET a URL as text, retrying transient failures with backoff. */
-export async function fetchText(url: string | URL, attempts = 5): Promise<string> {
+export async function fetchText(url: string | URL, attempts = 8): Promise<string> {
   for (let attempt = 1; ; attempt++) {
     try {
       const response = await fetch(url, { headers: { "User-Agent": "sol-data-fetch/2.0" } });
@@ -33,7 +33,7 @@ export async function fetchText(url: string | URL, attempts = 5): Promise<string
     } catch (error) {
       if (attempt >= attempts) throw error;
     }
-    await sleep(attempt * 2000);
+    await sleep(Math.min(30_000, 1000 * 2 ** attempt));
   }
 }
 

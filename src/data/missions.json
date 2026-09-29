@@ -1,0 +1,29 @@
+{
+  "source": "JPL Horizons",
+  "generatedAt": "2026-09-29T10:27:25.683Z",
+  "missions": [
+    {
+      "name": "NEAR Shoemaker",
+      "spkid": -93,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Landed on Eros, 12 Feb 2001 — the first landing on an asteroid",
+      "start": 2450132.584027778,
+      "end": null,
+      "finalParent": "Eros",
+      "landing": {
+        "body": "Eros",
+        "time": 2451953.3232203233,
+        "position": [
+          0.802000537,
+          4.872000115,
+          -4.146999761
+        ],
+        "latitude": -40.02646,
+        "longitude": 80.652134
+      },
+      "file": "data/missions/near-shoemaker.json"
+    }
+  ]
+}
