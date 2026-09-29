@@ -58,10 +58,3 @@ export function poleFrameToEcliptic(poleRaDeg: number, poleDecDeg: number): Mat3
   const toIcrf = multiply(rotationZ((poleRaDeg + 90) * DEG), rotationX((90 - poleDecDeg) * DEG));
   return multiply(EQUATORIAL_TO_ECLIPTIC, toIcrf);
 }
-
-/** Unit vector of the pole (RA, Dec in ICRF, degrees) in the J2000 ecliptic. */
-export function poleToEcliptic(poleRaDeg: number, poleDecDeg: number): [number, number, number] {
-  const ra = poleRaDeg * DEG;
-  const dec = poleDecDeg * DEG;
-  return transform(EQUATORIAL_TO_ECLIPTIC, Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec));
-}

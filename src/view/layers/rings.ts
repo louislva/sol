@@ -7,8 +7,7 @@
  * as the ellipse you would see looking down on the solar system.
  */
 
-import { DAYS_PER_CENTURY, J2000 } from "../../astro/constants";
-import { poleToEcliptic } from "../../astro/rotation";
+import { poleInEcliptic } from "../../astro/orientation";
 import type { Body, Ring } from "../../model/body";
 
 /** Rings fade in as the planet's disc grows from 30 to 35 px in radius. */
@@ -49,9 +48,7 @@ export class RingRenderer {
       this.gradients.set(body, entry);
     }
 
-    const centuries = (t - J2000) / DAYS_PER_CENTURY;
-    const { poleRa, poleDec } = body.orientation;
-    const [nx, ny, nz] = poleToEcliptic(poleRa[0] + poleRa[1] * centuries, poleDec[0] + poleDec[1] * centuries);
+    const [nx, ny, nz] = poleInEcliptic(body.orientation, t);
     const horizontal = Math.hypot(nx, ny);
     // u: in the ring plane and the ecliptic (full length); v: foreshortened by |nz|.
     const [vx, vy] = horizontal > 1e-9 ? [nx / horizontal, ny / horizontal] : [0, 1];

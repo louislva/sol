@@ -9,6 +9,7 @@
  */
 
 import type { KeplerOrbit } from "../astro/kepler";
+import type { OrientationModel } from "../astro/orientation";
 
 export type BodyKind =
   | "star"
@@ -50,12 +51,6 @@ export interface MotionSegment {
   motion: Motion;
 }
 
-/** IAU body orientation: pole (RA/Dec, ICRF) and prime meridian, secular terms only. */
-export interface Orientation {
-  poleRa: [number, number];   // deg, deg/century
-  poleDec: [number, number];  // deg, deg/century
-  primeMeridian: [number, number]; // deg, deg/day
-}
 
 export interface Ring {
   innerRadius: number; // km
@@ -114,7 +109,8 @@ export interface Body {
   /** Label rank: lower labels win collisions. */
   labelPriority: number;
 
-  orientation?: Orientation;
+  /** IAU orientation of the body's pole and prime meridian. */
+  orientation?: OrientationModel;
   rings?: Ring[];
   moonCategory?: MoonCategory;
   mission?: MissionInfo;
