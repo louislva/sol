@@ -49,6 +49,11 @@ interface CandidateBody {
   depth: number;
   /** Gravity strong enough for osculating conics to describe nearby motion. */
   keplerian: boolean;
+  /**
+   * A mission-era ephemeris of the body (the one spacecraft trajectories were
+   * navigated against), used where it has coverage instead of `command`.
+   */
+  spk?: { command: string; start: number; end: number };
   orientation?: OrientationModel;
 }
 
@@ -287,24 +292,58 @@ function flagWindows(craft: StateTable, parents: Array<CandidateBody | null>, bo
   return merged;
 }
 
+/** A body's states on a grid, from its mission-era ephemeris where that has coverage. */
+async function bodyGrid(body: CandidateBody, start: number, end: number, stepMinutes: number): Promise<StateTable> {
+  const spk = body.spk;
+  if (!spk || spk.end <= start || spk.start >= end) return vectorGrid(body.command, "500@10", start, end, stepMinutes);
+  const step = stepMinutes / 1440;
+  // Grid-aligned split points, so the pieces line up with the spacecraft's grid.
+  const first = Math.max(start, start + Math.ceil((spk.start - start) / step) * step);
+  const last = Math.min(end, start + Math.floor((spk.end - start) / step) * step);
+  const parts: StateTable[] = [];
+  if (first > start) parts.push(await vectorGrid(body.command, "500@10", start, first - step / 2, stepMinutes));
+  parts.push(await vectorGrid(spk.command, "500@10", first, last, stepMinutes));
+  if (last < end) parts.push(await vectorGrid(body.command, "500@10", last + step, end, stepMinutes));
+  return {
+    jd: parts.flatMap((part) => part.jd),
+    position: parts.flatMap((part) => part.position),
+    velocity: parts.flatMap((part) => part.velocity),
+  };
+}
+
+/** A body's states at given epochs, from its mission-era ephemeris where covered. */
+async function bodyVectors(body: CandidateBody, epochs: number[]): Promise<StateTable> {
+  const spk = body.spk;
+  const covered = (jd: number) => spk !== undefined && jd >= spk.start && jd <= spk.end;
+  const [inside, outside] = [epochs.filter(covered), epochs.filter((jd) => !covered(jd))];
+  const tables = [
+    inside.length ? await vectorsAt(spk!.command, "500@10", inside) : null,
+    outside.length ? await vectorsAt(body.command, "500@10", outside) : null,
+  ].filter((table): table is StateTable => table !== null);
+  const merged = tables.flatMap((table) => table.jd.map((jd, index) => ({ jd, position: table.position[index], velocity: table.velocity[index] })))
+    .sort((a, b) => a.jd - b.jd);
+  return { jd: merged.map((row) => row.jd), position: merged.map((row) => row.position), velocity: merged.map((row) => row.velocity) };
+}
+
 /**
  * Sample the spacecraft and the given bodies on a grid (always including the
  * end, which rarely falls on a grid step) and assign parents.
  */
 async function scanGrid(command: string, bodies: CandidateBody[], start: number, end: number, stepMinutes: number) {
-  const withEnd = async (target: string): Promise<StateTable> => {
-    const table = await vectorGrid(target, "500@10", start, end, stepMinutes);
+  const withEnd = async (table: StateTable, final: () => Promise<StateTable>): Promise<StateTable> => {
     if (end - table.jd[table.jd.length - 1] > MINUTE) {
-      const last = await vectorsAt(target, "500@10", [end]);
+      const last = await final();
       table.jd.push(...last.jd);
       table.position.push(...last.position);
       table.velocity.push(...last.velocity);
     }
     return table;
   };
-  const craft = await withEnd(command);
+  const craft = await withEnd(await vectorGrid(command, "500@10", start, end, stepMinutes), () => vectorsAt(command, "500@10", [end]));
   const tables = new Map<string, StateTable>();
-  for (const body of bodies) tables.set(body.name, await withEnd(body.command));
+  for (const body of bodies) {
+    tables.set(body.name, await withEnd(await bodyGrid(body, start, end, stepMinutes), () => bodyVectors(body, [end])));
+  }
   const parents = assignParents(craft, bodies, tables, exactIndex);
   return { craft, tables, parents };
 }
@@ -397,7 +436,13 @@ async function planSegments(config: MissionConfig, start: number, end: number, b
   return segments;
 }
 
-/** Earliest time after which the spacecraft sits still on the body (within tolerance). */
+/**
+ * Earliest time after which the spacecraft sits still on the body: its
+ * distance from the center stops changing. (Distance, not the body-fixed
+ * position, so a small difference between our rotation model and the one
+ * behind the ephemeris — comet spin states change — cannot hide a landing.)
+ * The site is the body-fixed position at that moment.
+ */
 async function findTouchdown(config: MissionConfig, body: CandidateBody, from: number, end: number): Promise<{ time: number; position: number[] } | null> {
   if (!body.orientation) throw new Error(`No orientation model for ${body.name}`);
   const command = String(config.spkid);
@@ -405,7 +450,7 @@ async function findTouchdown(config: MissionConfig, body: CandidateBody, from: n
   const relativeAt = async (jd: number): Promise<number[]> => {
     if (center) return (await vectorsAt(command, center, [jd])).position[0];
     const craft = await vectorsAt(command, "500@10", [jd]);
-    const target = await vectorsAt(body.command, "500@10", [jd]);
+    const target = await bodyVectors(body, [jd]);
     return sub(craft.position[0], target.position[0]);
   };
   const bodyFixed = async (jd: number) => {
@@ -413,14 +458,18 @@ async function findTouchdown(config: MissionConfig, body: CandidateBody, from: n
     const v = await relativeAt(jd);
     return [0, 1, 2].map((column) => m[column] * v[0] + m[3 + column] * v[1] + m[6 + column] * v[2]);
   };
-  const final = await bodyFixed(end);
-  const tolerance = Math.max(0.05, 0.002 * body.radius);
-  const atRest = async (jd: number) => norm(sub(await bodyFixed(jd), final)) < tolerance;
-  if (!(await atRest(end - 1 * MINUTE))) {
-    // The ephemeris stops at touchdown (no surface phase): land where it ends,
-    // if that is on the surface.
-    const altitude = norm(final) - body.radius;
-    return Math.abs(altitude) < Math.max(1, 0.02 * body.radius) ? { time: end, position: final } : null;
+  const finalDistance = norm(await relativeAt(end));
+  const tolerance = Math.max(0.01, 1e-5 * body.radius);
+  const atRest = async (jd: number) => Math.abs(norm(await relativeAt(jd)) - finalDistance) < tolerance;
+  // Resting on the surface, not coasting past or orbiting it.
+  const onSurface = Math.abs(finalDistance - body.radius) < Math.max(2, 0.05 * body.radius) + (body.keplerian ? 0 : body.radius);
+  if (!onSurface) {
+    console.warn(`    not on ${body.name}'s surface at the end: ${finalDistance.toFixed(3)} km from center (radius ${body.radius} km, center ${center ?? "by difference"})`);
+    return null;
+  }
+  if (!(await atRest(end - 60 * MINUTE))) {
+    // The ephemeris stops at touchdown (no surface phase): land where it ends.
+    return { time: end, position: await bodyFixed(end) };
   }
   let low = from;
   let high = end;
@@ -429,7 +478,7 @@ async function findTouchdown(config: MissionConfig, body: CandidateBody, from: n
     if (await atRest(middle)) high = middle;
     else low = middle;
   }
-  return { time: high, position: final };
+  return { time: high, position: await bodyFixed(high) };
 }
 
 /** Sample one segment adaptively; returns epochs and rows. */
@@ -443,7 +492,7 @@ async function sampleSegment(config: MissionConfig, plan: SegmentPlan, parentGm:
     if (!parent) return vectorsAt(command, "500@10", epochs);
     if (parent.center) return vectorsAt(command, parent.center, epochs);
     const craft = await vectorsAt(command, "500@10", epochs);
-    const target = await vectorsAt(parent.command, "500@10", craft.jd);
+    const target = await bodyVectors(parent, craft.jd);
     return {
       jd: craft.jd,
       position: craft.position.map((position, index) => sub(position, target.position[index])),
@@ -543,7 +592,21 @@ async function processMission(config: MissionConfig) {
   let [start, end] = await coverage(command, "500@10", 2_440_000.5, nowPlus);
   start += MINUTE;
   end -= MINUTE;
+  // Horizons epochs are TDB; published end times are UTC.
+  if (config.endsAt) end = Math.min(end, isoToJulian(config.endsAt) + 69.184 / 86_400);
   const extendsToFuture = end > nowPlus - 1;
+
+  // Mission-era ephemerides of small-body targets, where Horizons has them.
+  for (const body of bodies) {
+    if (ALWAYS.includes(body) || body.depth !== 1 || !body.center) continue;
+    const id = body.center.replace("500@", "");
+    try {
+      const [spkStart, spkEnd] = await coverage(id, "500@10", start, end);
+      if (spkEnd > spkStart) body.spk = { command: id, start: spkStart + MINUTE, end: spkEnd - MINUTE };
+    } catch {
+      // No mission-era ephemeris: the SBDB solution is used throughout.
+    }
+  }
 
   let landing: { body: string; time: number; position: number[]; latitude: number; longitude: number } | null = null;
   let plans = await planSegments(config, start, end, bodies);

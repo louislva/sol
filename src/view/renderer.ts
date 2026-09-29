@@ -347,8 +347,9 @@ export class Renderer {
     const centerX = this.screenX[ground.index];
     const centerY = this.screenY[ground.index];
     const offset = Math.hypot(x - centerX, y - centerY);
-    // Seen from above near the disc's center, "up" points at the viewer; stand upright.
-    const up = offset > 0.25 * this.radiusPx[ground.index] ? Math.atan2(y - centerY, x - centerX) : -Math.PI / 2;
+    // Near the limb, "up" is away from the body; across the disc it points at
+    // the viewer, so the figure simply stands upright.
+    const up = offset > 0.7 * this.radiusPx[ground.index] ? Math.atan2(y - centerY, x - centerX) : -Math.PI / 2;
     const side = up + Math.PI / 2;
     drawSpacecraftIcon(this.ctx, "lander", x, y, 6, color);
     drawStickFigure(this.ctx, x + Math.cos(side) * 9, y + Math.sin(side) * 9, up, 16, "#ffffff");

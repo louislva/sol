@@ -147,7 +147,7 @@ function articleCandidates(target: Target, world: World): string[] {
   const body = target.body;
   switch (body.kind) {
     case "moon": return [`${name} (moon)`, name];
-    case "spacecraft": return [name, `${plain} (spacecraft)`, plain];
+    case "spacecraft": return [`${plain} (spacecraft)`, `${plain} (rover)`, name, plain];
     case "dwarf": return [`${name} (dwarf planet)`, name];
     case "asteroid":
     case "comet": {

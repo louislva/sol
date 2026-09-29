@@ -27,6 +27,11 @@ export interface MissionConfig {
   landsOn?: string;
   /** What happened at the end of the ephemeris, for the info panel. */
   fate?: string;
+  /**
+   * Published end of the mission (ISO UTC), where Horizons' ephemeris runs on
+   * past it — e.g. an impactor whose solution continues along the target.
+   */
+  endsAt?: string;
 }
 
 const GALILEAN = ["Io", "Europa", "Ganymede", "Callisto"];
@@ -64,7 +69,7 @@ export const MISSIONS: MissionConfig[] = [
   { name: "OSIRIS-REx", spkid: -64, type: "deep_space", icon: "probe", status: "active", targets: ["Bennu"] },
   { name: "Deep Impact", spkid: -140, type: "deep_space", icon: "probe", status: "ended", targets: ["Tempel 1", "Hartley 2"], fate: "Contact lost 2013" },
   { name: "Stardust", spkid: -29, type: "deep_space", icon: "probe", status: "ended", targets: ["Wild 2", "Annefrank", "Tempel 1"], fate: "Returned comet dust to Earth 2006; retired 2011" },
-  { name: "DART", spkid: -135, type: "deep_space", icon: "probe", status: "ended", targets: ["Didymos"], fate: "Impacted Dimorphos, moon of Didymos, 26 Sep 2022" },
+  { name: "DART", spkid: -135, type: "deep_space", icon: "probe", status: "ended", targets: ["Didymos"], fate: "Impacted Dimorphos, moon of Didymos, 26 Sep 2022", endsAt: "2022-09-26T23:14:24Z" },
   { name: "Lucy", spkid: -49, type: "deep_space", icon: "probe", status: "active", targets: ["Dinkinesh", "Donaldjohanson"] },
   { name: "Psyche (spacecraft)", spkid: -255, horizonsName: "Psyche", type: "deep_space", icon: "probe", status: "active", targets: ["Psyche"] },
 

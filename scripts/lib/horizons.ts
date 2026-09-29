@@ -154,18 +154,29 @@ export async function elementsAt(command: string, center: string, epochs: readon
  * outside it on each side and reading the limit from the error.
  */
 export async function coverage(command: string, center: string, guessStart: number, guessEnd: number): Promise<[number, number]> {
-  const probe = async (jd: number): Promise<{ side: "before" | "after"; jd: number } | null> => {
+  /** null if Horizons has data at jd; otherwise the limit it reports, or "unknown". */
+  const probe = async (jd: number): Promise<{ side: "before" | "after"; jd: number } | "unknown" | null> => {
     try {
       await query({ COMMAND: `'${command}'`, CENTER: `'${center}'`, EPHEM_TYPE: "VECTORS", TLIST: `'${jd}'`, VEC_TABLE: "1" });
       return null;
     } catch (error) {
       if (!(error instanceof HorizonsError)) throw error;
-      const limit = horizonsCoverageLimit(error.text);
-      if (!limit) throw error;
-      return limit;
+      return horizonsCoverageLimit(error.text) ?? "unknown";
     }
   };
   const before = await probe(guessStart);
+  if (before === "unknown") throw new Error(`Cannot determine where ${command}'s ephemeris starts`);
+  const start = before?.jd ?? guessStart;
   const after = await probe(guessEnd);
-  return [before?.jd ?? guessStart, after?.jd ?? guessEnd];
+  if (after !== "unknown") return [start, after?.jd ?? guessEnd];
+
+  // Some ephemerides fail past their end without naming it; bisect for it.
+  let valid = start + 1 / 1440;
+  let invalid = guessEnd;
+  while (invalid - valid > 1 / 1440) {
+    const middle = (valid + invalid) / 2;
+    if ((await probe(middle)) === null) valid = middle;
+    else invalid = middle;
+  }
+  return [start, valid];
 }
