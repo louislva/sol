@@ -63,6 +63,7 @@ const CATALOG: CatalogEntry[] = [
   { spkid: -61, name: "Juno", type: "planetary_orbiter", status: "active", icon: "orbiter", launch: "2011-08-05", center: "Jupiter" },
   { spkid: -49, name: "Lucy", type: "deep_space", status: "active", icon: "probe", launch: "2021-10-16", center: "Sun" },
   { spkid: -255, name: "Psyche (spacecraft)", horizonsName: "Psyche", type: "deep_space", status: "active", icon: "probe", launch: "2023-10-13", center: "Sun" },
+  { spkid: -135, name: "DART", type: "deep_space", status: "ended", icon: "probe", launch: "2021-11-24", end: "2022-09-26", center: "Sun" },
   { spkid: -85, name: "Lunar Reconnaissance Orbiter", type: "planetary_orbiter", status: "active", icon: "orbiter", launch: "2009-06-18", center: "Moon", horizonsName: "LRO" },
   { spkid: -78, name: "DSCOVR", type: "deep_space", status: "active", icon: "probe", launch: "2015-02-11", center: "Sun" },
   { spkid: -23, name: "Pioneer 10", type: "deep_space", status: "ended", icon: "probe", launch: "1972-03-03", end: "2003-01-23", center: "Sun" },
