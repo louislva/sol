@@ -1,6 +1,6 @@
 /** Simulation time: a Julian date (TDB) advanced at a chosen rate. */
 
-import { dateToJulian, julianToDate, SECONDS_PER_DAY } from "../astro/constants";
+import { dateToJulian, formatYear, julianToDate, SECONDS_PER_DAY, withinCalendar } from "../astro/constants";
 
 /** Named speeds (the console's `sol.setSpeed`). */
 export type SpeedMode = "auto" | "realtime" | "day" | "month" | "year";
@@ -45,13 +45,15 @@ export function autoSpeedForZoom(zoom: number): number {
  * Speed limit: the fastest any speed may run at this zoom, so that close in
  * time can't race by at geological rates. About a month per second around
  * Earth and the Moon, ten years among the inner planets, a thousand at
- * Neptune, and the full 100,000 years only out among the stars.
+ * Neptune, 100,000 years out among the stars, and a million only with the
+ * whole Galaxy in view.
  */
 const SPEED_LIMIT_POINTS: Array<[number, number]> = [
   [6.4e-5, 2_629_800],
   [2.7e-6, 10 * 31_557_600],
   [1.2e-7, 1_000 * 31_557_600],
   [3.8e-12, 100_000 * 31_557_600],
+  [1e-15, 1_000_000 * 31_557_600],
 ];
 /** Slowest limit, however far in: an hour per second (an orbit of the ISS in 1.5 s). */
 const SPEED_LIMIT_MIN = 3_600;
@@ -74,19 +76,21 @@ function interpolateLogLog(points: Array<[number, number]>, zoom: number): numbe
 
 const YEAR_SECONDS = 31_557_600;
 
-/** Manual speeds range over these magnitudes (simulated s per s): realtime to 100,000 years per second. */
+/** Manual speeds range over these magnitudes (simulated s per s): realtime to a million years per second. */
 export const MIN_SPEED = 1;
-export const MAX_SPEED = 100_000 * YEAR_SECONDS;
+export const MAX_SPEED = 1_000_000 * YEAR_SECONDS;
 
 /** Speeds that fast-forward and rewind step through. */
-const SPEED_LADDER = [1, 60, 3_600, 86_400, 604_800, 2_629_800, YEAR_SECONDS, 10, 100, 1_000, 10_000, 100_000]
+const SPEED_LADDER = [1, 60, 3_600, 86_400, 604_800, 2_629_800, YEAR_SECONDS, 10, 100, 1_000, 10_000, 100_000, 1_000_000]
   .map((speed, index) => (index > 6 ? speed * YEAR_SECONDS : speed));
 
 /**
- * Deep time: the stars' straight-line motion holds for a few hundred
- * thousand years, and JavaScript dates reach ±270,000 years.
+ * Deep time: ten million years either way. Beyond a few hundred thousand
+ * years the stars' straight-line paths are approximations (the Galaxy's
+ * tides bend them), and the solar system itself is long extrapolated;
+ * past the calendar's reach dates are shown as years.
  */
-export const DEEP_TIME_YEARS = 250_000;
+export const DEEP_TIME_YEARS = 10_000_000;
 
 export class Clock {
   julianDate: number;
@@ -198,6 +202,7 @@ export class Clock {
    * read: seconds near realtime, minutes up to a day per second.
    */
   format(): string {
+    if (!withinCalendar(this.julianDate)) return formatYear(this.julianDate);
     const date = this.date;
     const year = date.getUTCFullYear();
     const day = `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${year > 0 ? year : `${1 - year} BC`}`;

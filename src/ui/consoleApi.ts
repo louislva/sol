@@ -8,6 +8,7 @@ import type { App } from "../app";
 import type { SpeedMode } from "../model/clock";
 import type { Target } from "../model/world";
 import { profiler } from "../view/profiler";
+import { parseDateInput } from "./controls";
 
 const HELP = `
 Navigation:
@@ -22,7 +23,7 @@ Navigation:
   sol.zoomIn(3) / zoomOut(3) Zoom by a factor
 
 Time:
-  sol.setDate("2024-07-04")  Jump to a date (ISO)
+  sol.setDate("2024-07-04")  Jump to a date (ISO), or a year ("44250", "-3000000")
   sol.setSpeed("year")       auto | realtime | day | month | year
   sol.setTimeScale(86400)    Exact rate in simulated s per s (negative runs backward)
   sol.pause() / resume()     resume = forward at auto speed
@@ -96,9 +97,9 @@ export function installConsoleApi(app: App): void {
     },
 
     setDate(text: string) {
-      const date = new Date(text);
-      if (Number.isNaN(date.getTime())) return `Invalid date "${text}"; use ISO format like "2024-01-15".`;
-      app.setDate(date);
+      const jd = parseDateInput(text);
+      if (jd === null) return `Invalid date "${text}"; use ISO format like "2024-01-15", or a year like "-3000000".`;
+      app.setJulianDate(jd);
       return `Date ${clock.format()}`;
     },
     setSpeed(mode: SpeedMode) {

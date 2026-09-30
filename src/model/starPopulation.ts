@@ -58,8 +58,8 @@ export class StarPopulation {
   readonly x: Float64Array;
   readonly y: Float64Array;
   readonly z: Float64Array;
-  /** Distance from the Sun of the nearest star, as of `time`. */
-  nearestDistance = Number.POSITIVE_INFINITY;
+  /** Top-down (x, y) distance from the Sun of the nearest star, as of `time`: no view closer in can show one. */
+  nearestProjectedDistance = Number.POSITIVE_INFINITY;
   private time = Number.NaN;
 
   private readonly x0: Float64Array;
@@ -138,10 +138,10 @@ export class StarPopulation {
       x[index] = px;
       y[index] = py;
       z[index] = pz;
-      const d = px * px + py * py + pz * pz;
+      const d = px * px + py * py;
       if (d < nearest) nearest = d;
     }
-    this.nearestDistance = Math.sqrt(nearest);
+    this.nearestProjectedDistance = Math.sqrt(nearest);
   }
 
   positionAt(index: number, t: number, out: Float64Array | number[]): void {

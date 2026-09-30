@@ -106,18 +106,33 @@ into the Galactic plane, fully so beyond 60,000 AU (`astro/galactic.ts`
 share one frame, so Voyager meets its stars where the map shows them. Stars
 are drawn within a slab around the height of whatever is framed. At galactic
 scale a synthetic Milky Way (WebGL, behind the main canvas) fills in the face-on
-picture, thinning out near the Sun where the real stars are; Sagittarius A* is
-a black disc at its event horizon's size, never smaller than a few pixels. The clock
-spans ±250,000 years; outside 3000 BC – 3000 AD the planets' positions are
-extrapolations (the status line says so), and Earth satellites show only
-near their element epochs.
+picture, thinning out near the Sun where the real stars are, its bar and arms
+turning at their measured pattern speeds. Sagittarius A* is a catalog body
+(kind `blackHole`, motion `galacticCenter`) drawn at its event horizon's size,
+never smaller than a few pixels. The clock spans ±10 million years; beyond the
+calendar's reach (±200,000 years) dates are shown as years. The clock
+spans ±10 million years; outside 3000 BC – 3000 AD the planets' positions are
+extrapolations (the status line says so; their orbit shapes hold at the model's
+boundary values), and Earth satellites show only near their element epochs.
+
+### Other star systems (extending)
+Stars are a population (SoA, `model/starPopulation.ts`), not bodies, so 11k+
+of them cost little. A star is still a full `Target`: hover, select, follow,
+search, and it becomes the automatic reference frame when the view is within
+half a light-year of it (`view/referenceFrame.ts`). To give a star planets,
+make that star a `Body` (parent: Sun; motion in the display frame like
+`galacticCenter`, i.e. not twisted), leave it out of the population, and add
+its planets as bodies with `kepler` motion about it. The hierarchy then handles
+positions, orbits, level of detail and framing as it does for the Sun.
 
 ### Reference frames
 The camera stores its center as an offset from a frame body that moves with
 it. Automatically, the frame is the deepest body whose region (Hill sphere,
 widened to cover its moons) contains the view center while the view is not
 much larger than that region — Earth when looking at satellites, Jupiter for
-the Galilean moons, the Sun for the planets. `Follow` (sidebar button,
+the Galilean moons, the Sun for the planets, a star or Sagittarius A* when
+zoomed in on one out among the stars. Zooming in over an object keeps the zoom
+anchored on it as it moves. `Follow` (sidebar button,
 double-click, or `sol.follow`) locks the frame to any object; Esc releases.
 
 ### Spacecraft missions

@@ -19,6 +19,13 @@ export interface SecularRates {
   i?: number;
   node?: number;
   argPeri?: number;
+  /**
+   * Julian dates the rates hold over. Outside it the shape and orientation
+   * stay as at the nearer end (the body still moves along the orbit) —
+   * linear drifts extrapolated for millions of years would, for example,
+   * push eccentricities past 1.
+   */
+  span?: [number, number];
 }
 
 /**
@@ -250,12 +257,14 @@ export class KeplerOrbit {
     this.shape.meanAnomaly = M;
     if (!this.isStatic) {
       const rates = el.rates!;
-      this.setShape(el.a + (rates.a ?? 0) * dt, el.e + (rates.e ?? 0) * dt);
+      // Beyond the rates' span the shape holds at its boundary value.
+      const drift = rates.span ? Math.min(rates.span[1], Math.max(rates.span[0], t)) - el.epoch : dt;
+      this.setShape(el.a + (rates.a ?? 0) * drift, el.e + (rates.e ?? 0) * drift);
       orientationBasis(
         this.frame,
-        el.i + (rates.i ?? 0) * dt,
-        el.node + (rates.node ?? 0) * dt,
-        el.argPeri + (rates.argPeri ?? 0) * dt,
+        el.i + (rates.i ?? 0) * drift,
+        el.node + (rates.node ?? 0) * drift,
+        el.argPeri + (rates.argPeri ?? 0) * drift,
         this.shape
       );
     }

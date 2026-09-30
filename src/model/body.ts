@@ -10,6 +10,7 @@
 
 import type { KeplerOrbit } from "../astro/kepler";
 import type { OrientationModel } from "../astro/orientation";
+import type { GalaxyModel } from "../astro/galactic";
 
 export type BodyKind =
   | "star"
@@ -19,7 +20,8 @@ export type BodyKind =
   | "moon"
   | "asteroid"
   | "comet"
-  | "spacecraft";
+  | "spacecraft"
+  | "blackHole";
 
 export type MoonCategory = "major" | "medium" | "named" | "minor";
 export type SpacecraftIcon = "probe" | "orbiter" | "telescope" | "lander";
@@ -58,7 +60,12 @@ export type Motion =
    * Reflex motion about a barycenter: position = −massRatio × (partner's
    * position relative to this body). Earth about the Earth–Moon barycenter.
    */
-  | { kind: "barycentric"; partner: Body; massRatio: number };
+  | { kind: "barycentric"; partner: Body; massRatio: number }
+  /**
+   * The Galactic center as seen from the Sun (astro/galactic), given directly
+   * in the display frame — so, unlike other motion about the Sun, not twisted.
+   */
+  | { kind: "galacticCenter"; model: GalaxyModel };
 
 export interface MotionSegment {
   /** Julian date (TDB) the segment starts; −Infinity for "always". */

@@ -6,7 +6,7 @@
  * possibly switch reference frame → draw → update hover and the UI.
  */
 
-import { AU_KM, J2000, julianToDate } from "./astro/constants";
+import { AU_KM, dateToJulian, J2000, julianToDate } from "./astro/constants";
 import { LIGHT_YEAR_KM } from "./astro/galactic";
 import { type Body, orbitAt, segmentAt } from "./model/body";
 import { AUTO_SPEED_MAX, Clock, DEEP_TIME_YEARS, type SpeedMode } from "./model/clock";
@@ -46,7 +46,10 @@ export class App {
   private readonly controls: Controls;
 
   /** Frame chosen automatically when nothing is followed. */
-  private autoFrame: Body;
+  /** The frame the view would choose by itself (followed or not): a body, or a star out among the stars. */
+  private autoFrame: Target;
+  /** What a zoom over an object is homing in on, tracked while the zoom lasts. */
+  private zoomTarget: Target | null = null;
   /** Explicitly followed object; overrides the automatic frame. */
   private followed: Target | null = null;
   /** The target whose position is the camera origin this frame. */
@@ -72,9 +75,9 @@ export class App {
     this.canvas = canvas;
     this.renderer = new Renderer(canvas, this.world);
     this.frames = new ReferenceFrameSelector(this.world);
-    this.autoFrame = this.world.earth;
+    this.autoFrame = { type: "body", body: this.world.earth };
     this.missionBodies = this.world.bodies.filter((body) => body.mission?.trajectoryFile);
-    this.frameTarget = { type: "body", body: this.autoFrame };
+    this.frameTarget = this.autoFrame;
 
     this.sidebar = new Sidebar({
       close: () => this.select(null),
@@ -94,7 +97,7 @@ export class App {
         this.clock.paused = false;
       },
       now: () => this.setDate(new Date()),
-      date: (date) => this.setDate(date),
+      date: (jd) => this.setJulianDate(jd),
       mission: (name) => {
         const body = this.world.catalog.get(name);
         if (body) void this.watchFromLaunch(body);
@@ -131,13 +134,14 @@ export class App {
 
     this.clock.advance(dt, this.camera.zoom, this.followed ? this.pacedRate() : undefined);
     this.world.setTime(this.clock.julianDate);
-    this.camera.update(dt);
     profiler.measure("frame selection", () => this.updateReferenceFrame());
+    this.trackZoomTarget();
+    this.camera.update(dt);
 
     this.viewState.hovered = this.hovered?.target ?? null;
     this.viewState.selected = this.selected;
     this.viewState.followed = this.followed;
-    this.viewState.trailFrame = { type: "body", body: this.autoFrame };
+    this.viewState.trailFrame = this.autoFrame;
     profiler.measure("render", () => this.renderer.render(this.world, this.camera, this.viewState));
 
     if (this.pointer && (this.hoverDirty || now - this.lastHoverMs >= HOVER_REFRESH_MS)) {
@@ -164,8 +168,8 @@ export class App {
   private pacedRate(): number | undefined {
     const target = this.followed!;
     // A followed body that is itself the frame has no motion to pace.
-    if (target.type === "body" && target.body === this.autoFrame) return undefined;
-    const context: Target = { type: "body", body: this.autoFrame };
+    if (sameTarget(target, this.autoFrame)) return undefined;
+    const context = this.autoFrame;
     const t = this.world.time;
     const probe = 60 / 86_400; // one minute
     const now = [0, 0, 0];
@@ -184,6 +188,18 @@ export class App {
     return Math.min(MAX_AUTO_RATE, Math.max(1, rate));
   }
 
+  /** Keep a zoom's anchor on the object it is homing in on, as it moves within the frame. */
+  private trackZoomTarget(): void {
+    const target = this.zoomTarget;
+    if (!target) return;
+    if (!this.camera.zooming || !this.world.exists(target)) {
+      this.zoomTarget = null;
+      return;
+    }
+    this.world.position(target, this.scratch);
+    this.camera.retargetAnchor(this.scratch[0] - this.camera.originX, this.scratch[1] - this.camera.originY);
+  }
+
   /**
    * Keep the camera in the frame of the followed object, or of the body
    * whose region the view is in. The origin moves with that body, so it
@@ -192,7 +208,7 @@ export class App {
   private updateReferenceFrame(): void {
     if (this.followed && !this.world.exists(this.followed)) this.unfollow();
 
-    const next: Target = this.followed ?? { type: "body", body: this.autoFrame };
+    const next: Target = this.followed ?? this.autoFrame;
     if (!sameTarget(next, this.frameTarget)) {
       this.world.position(next, this.scratch);
       this.camera.changeOrigin(this.scratch[0], this.scratch[1]);
@@ -204,10 +220,10 @@ export class App {
     // The automatic frame is tracked even while following: it is the
     // context trails are drawn in (the Sun in cruise, Jupiter at Jupiter).
     const chosen = this.frames.choose(this.world, this.camera, this.autoFrame);
-    if (chosen !== this.autoFrame) {
+    if (!sameTarget(chosen, this.autoFrame)) {
       this.autoFrame = chosen;
       if (!this.followed) {
-        this.frameTarget = { type: "body", body: chosen };
+        this.frameTarget = chosen;
         this.world.position(this.frameTarget, this.scratch);
         this.camera.changeOrigin(this.scratch[0], this.scratch[1]);
       }
@@ -223,7 +239,7 @@ export class App {
       `${this.followed ? "following" : "frame"} ${frameName}`,
       `zoom ${this.camera.zoom.toExponential(1)}`,
     ].join(" · ");
-    this.controls.setText(this.clock.format(), status, this.clock.date);
+    this.controls.setText(this.clock.format(), status, this.clock.julianDate);
     this.controls.setClock(this.clock);
     if (this.sidebar.visible) this.sidebar.update(this.world, this.isFollowing(this.selected));
   }
@@ -243,12 +259,15 @@ export class App {
       zoom: (factor, x, y) => {
         const hovered = this.hovered;
         this.hoverDirty = true;
-        // Zooming in over an object homes in on the object itself.
+        // Zooming in over an object homes in on the object itself, and keeps
+        // tracking it while the zoom lasts, however fast it moves.
         if (factor > 1 && hovered?.direct) {
           this.world.position(hovered.target, this.scratch);
           this.camera.zoomToward(factor, this.scratch[0] - this.camera.originX, this.scratch[1] - this.camera.originY);
+          this.zoomTarget = hovered.target;
         } else {
           this.camera.zoomAt(factor, x, y);
+          this.zoomTarget = null;
         }
       },
       pan: (dx, dy) => {
@@ -370,10 +389,11 @@ export class App {
 
   /** Jump to a date; positions and the camera's frame origin update immediately. */
   setDate(date: Date): void {
-    this.setJulianDate(this.clock.julianDate + (date.getTime() - this.clock.date.getTime()) / 86_400_000);
+    this.setJulianDate(dateToJulian(date));
   }
 
-  private setJulianDate(jd: number): void {
+  /** Jump to a Julian date (TDB), within the clock's span. */
+  setJulianDate(jd: number): void {
     const [first, last] = this.clock.bounds;
     jd = Math.min(last, Math.max(first, jd));
     this.clock.julianDate = jd;
@@ -409,6 +429,7 @@ export class App {
     if (target.type === "star") return 0.5 * LIGHT_YEAR_KM;
     const body = target.body;
     if (body.kind === "star") return 1.5 * AU_KM;
+    if (body.kind === "blackHole") return LIGHT_YEAR_KM;
     if (body.kind === "spacecraft") {
       return segmentAt(body, this.world.time).parent?.kind === "star" ? 0.02 * AU_KM : 50_000;
     }

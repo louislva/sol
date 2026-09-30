@@ -10,10 +10,10 @@
  * stars where the map shows them.
  */
 
-import { twist } from "../astro/galactic";
+import { galacticCenterAt, twist } from "../astro/galactic";
 import { conicPosition } from "../astro/kepler";
 import { bodyFixedToEcliptic } from "../astro/orientation";
-import { type Body, type Motion, segmentAt, seriesIndex } from "./body";
+import { type Body, type Motion, type MotionSegment, segmentAt, seriesIndex } from "./body";
 
 const seriesScratch = new Float64Array(3);
 const TWO_PI = Math.PI * 2;
@@ -66,7 +66,7 @@ export class Ephemeris {
       pz = this.positions[parentOffset + 2];
     }
     evaluateMotion(segment.motion, t, this.scratch);
-    if (segment.parent?.kind === "star") twist(this.scratch);
+    if (turnsIntoGalacticPlane(segment)) twist(this.scratch);
     this.positions[offset] = px + this.scratch[0];
     this.positions[offset + 1] = py + this.scratch[1];
     this.positions[offset + 2] = pz + this.scratch[2];
@@ -86,7 +86,7 @@ export class Ephemeris {
   positionAt(body: Body, t: number, out: Float64Array | number[]): void {
     const segment = segmentAt(body, t);
     evaluateMotion(segment.motion, t, out);
-    if (segment.parent?.kind === "star") twist(out);
+    if (turnsIntoGalacticPlane(segment)) twist(out);
     const step = this.scratch;
     for (let parent = segment.parent; parent; ) {
       const parentSegment = segmentAt(parent, t);
@@ -99,7 +99,12 @@ export class Ephemeris {
   }
 }
 
-/** Position relative to the segment's parent (km, J2000 ecliptic). */
+/** Motion about the Sun is in the ecliptic and takes the display's turn into the Galactic plane far out. */
+function turnsIntoGalacticPlane(segment: MotionSegment): boolean {
+  return segment.parent?.kind === "star" && segment.motion.kind !== "galacticCenter";
+}
+
+/** Position relative to the segment's parent (km, J2000 ecliptic; the display frame for galacticCenter). */
 export function evaluateMotion(motion: Motion, t: number, out: Float64Array | number[]): void {
   switch (motion.kind) {
     case "fixed":
@@ -109,6 +114,9 @@ export function evaluateMotion(motion: Motion, t: number, out: Float64Array | nu
       return;
     case "kepler":
       motion.orbit.positionAt(t, out);
+      return;
+    case "galacticCenter":
+      galacticCenterAt(motion.model, t, out);
       return;
     case "keplerSeries": {
       const { epochs, orbits } = motion;

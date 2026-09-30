@@ -1,6 +1,6 @@
 {
   "source": "Reid et al. 2019, ApJ 885, 131 (arXiv:1910.03357): Table 2 and fit A5 of Table 3; structure from Bland-Hawthorn & Gerhard 2016, Wegg & Gerhard 2013, GRAVITY Collaboration 2022",
-  "generatedAt": "2026-09-30T07:50:36.386Z",
+  "generatedAt": "2026-09-30T07:59:58.435Z",
   "note": "Distances kpc, angles deg, velocities km/s, masses solar. Arm azimuths β from the Galactic center, 0 toward the Sun, increasing with Galactic rotation; width is the Gaussian 1σ at R_kink.",
   "r0": 8.15,
   "zSun": 0.0055,
@@ -26,6 +26,10 @@
     ]
   },
   "sagittariusAStarMass": 4297000,
+  "patternSpeeds": {
+    "arms": 28.2,
+    "bar": 39
+  },
   "majorArmPitch": 10,
   "arms": [
     {

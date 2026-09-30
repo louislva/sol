@@ -5,14 +5,14 @@
  */
 
 import { AU_KM } from "../astro/constants";
-import { LIGHT_YEAR_KM, PARSEC_KM } from "../astro/galactic";
+import { LIGHT_YEAR_KM, PARSEC_KM, patternAngle } from "../astro/galactic";
 import { bodyFixedToEcliptic } from "../astro/orientation";
 import { type Body, type BodyKind, existsAt, orbitAt, segmentAt, visibleParentAt } from "../model/body";
 import { sameTarget, type Target, type World } from "../model/world";
 import type { Camera } from "./camera";
 import { GalaxyGl } from "./galaxy/galaxyGl";
 import { sampleGalaxy } from "./galaxy/syntheticGalaxy";
-import { GalacticCenterLayer } from "./layers/galacticCenter";
+import { BLACK_HOLE_RIM_COLOR } from "../data/palette";
 import { drawSpacecraftIcon, drawStickFigure } from "./layers/icons";
 import { LabelLayer } from "./layers/labels";
 import { OrbitLayer } from "./layers/orbits";
@@ -38,6 +38,7 @@ const MIN_RADIUS_PX: Record<BodyKind, number> = {
   comet: 2,
   spacecraft: 8,
   barycenter: 0,
+  blackHole: 5,
 };
 
 const ORBIT_ALPHA = 0.35;
@@ -89,7 +90,6 @@ export class Renderer {
   private readonly trails = new TrailLayer();
   private readonly galaxy: GalaxyGl;
   private galaxySampled = false;
-  private readonly galacticCenter = new GalacticCenterLayer();
   private readonly centerScratch = new Float64Array(3);
   private readonly stars = new StarLayer();
   private readonly brightened = new Map<string, string>();
@@ -135,7 +135,6 @@ export class Renderer {
 
     const galaxyAlpha = fade(camera.viewRadius, GALAXY_FADE[0], GALAXY_FADE[1]);
     profiler.measure("galaxy", () => this.drawGalaxy(world, camera, galaxyAlpha));
-    this.galacticCenter.draw(ctx, world, camera, this.labels, galaxyAlpha);
     if (world.stars && this.viewReachesStars(world, camera)) {
       const stars = world.stars;
       const highlight = [state.hovered, state.selected].find((target) => target?.type === "star");
@@ -314,7 +313,11 @@ export class Renderer {
             traceDisc(ctx, x, y, radius, camera.width, camera.height);
           }
           ctx.fill();
-          if (body.kind !== "star" && radius < LARGE_DISC_PX) {
+          if (body.kind === "blackHole") {
+            ctx.strokeStyle = BLACK_HOLE_RIM_COLOR;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          } else if (body.kind !== "star" && radius < LARGE_DISC_PX) {
             ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
             ctx.lineWidth = 0.5;
             ctx.stroke();
@@ -413,6 +416,8 @@ export class Renderer {
       centerX: camera.worldToScreenX(this.centerScratch[0]),
       centerY: camera.worldToScreenY(this.centerScratch[1]),
       scale: 1000 * PARSEC_KM * camera.zoom,
+      armAngle: patternAngle(world.galaxy.patternSpeeds.arms, world.time),
+      barAngle: patternAngle(world.galaxy.patternSpeeds.bar, world.time),
       width: camera.width,
       height: camera.height,
       pixelRatio: camera.pixelRatio,
@@ -429,7 +434,7 @@ export class Renderer {
     const stars = world.stars!;
     stars.update(world.time);
     const farthest = Math.hypot(camera.centerX, camera.centerY) + camera.viewRadius;
-    return farthest >= stars.nearestDistance;
+    return farthest >= stars.nearestProjectedDistance;
   }
 
   /** Labels for a hovered or selected asteroid or satellite. */

@@ -138,6 +138,18 @@ export class Camera {
     this.targetZoom = this.clampZoom(this.targetZoom * factor);
   }
 
+  /** Whether an anchored zoom is in progress. */
+  get zooming(): boolean {
+    return this.anchor !== null;
+  }
+
+  /** Move the point an anchored zoom is pinned to (frame-relative km), e.g. to follow a moving object. */
+  retargetAnchor(frameX: number, frameY: number): void {
+    if (!this.anchor) return;
+    this.anchor.frameX = frameX;
+    this.anchor.frameY = frameY;
+  }
+
   /** Immediately scale the zoom about a screen point (pinch gestures). */
   pinch(factor: number, fromX: number, fromY: number, toX: number, toY: number): void {
     const frameX = (fromX - this.width / 2) / this.zoomValue + this.offsetX;

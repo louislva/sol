@@ -24,6 +24,9 @@
  *     exponential scale lengths along its three axes, 0.70 × 0.44 × 0.18 kpc.
  *   GRAVITY Collaboration 2022, A&A 657, L12 — the mass of Sagittarius A*,
  *     4.297 million solar masses.
+ *   Dias et al. 2019, MNRAS 486, 5726 — the spiral pattern's angular speed,
+ *     28.2 km/s/kpc, from the birthplaces of open clusters.
+ *   Portail et al. 2017, MNRAS 465, 1621 — the bar's, 39 km/s/kpc.
  *
  * Output: src/data/galaxy.json
  * Run:    node scripts/fetch-galaxy.ts
@@ -42,6 +45,7 @@ const STRUCTURE = {
   bar: { halfLength: 5.0, angle: 27 },
   bulge: { scaleLengths: [0.7, 0.44, 0.18] },
   sagittariusAStarMass: 4.297e6,
+  patternSpeeds: { arms: 28.2, bar: 39 },
 };
 
 /** "$-4.2\pm3.8$" → −4.2; "$15\rightarrow\p18$" → [15, 18]; "..." → null. */

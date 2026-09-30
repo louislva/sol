@@ -87,3 +87,7 @@ export const STAR_CLASS_COLORS: Record<string, string> = {
   D: "#dfe6ff",
 };
 export const DEFAULT_STAR_COLOR = "#dddddd";
+
+/** Sagittarius A*: black, with a faint rim so it reads against empty space too. */
+export const BLACK_HOLE_COLOR = "#000000";
+export const BLACK_HOLE_RIM_COLOR = "#6b5a44";

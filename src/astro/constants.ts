@@ -48,3 +48,29 @@ export function wrapAngle(radians: number): number {
   const wrapped = radians % TWO_PI;
   return wrapped < 0 ? wrapped + TWO_PI : wrapped;
 }
+
+/** Mean Gregorian year in days: years far from now are counted in these. */
+const GREGORIAN_YEAR_DAYS = 365.2425;
+/** JavaScript dates reach ±8.64e15 ms from 1970, about ±273,000 years; stay well inside. */
+const CALENDAR_LIMIT_YEARS = 200_000;
+
+/** Astronomical year number (… −1, 0, 1 …) with fraction; exact enough for deep time. */
+export function julianYear(jd: number): number {
+  return 2000 + (jd - J2000) / GREGORIAN_YEAR_DAYS;
+}
+
+/** Julian date (TDB) at the start of an astronomical year, for years beyond the calendar. */
+export function yearToJulian(year: number): number {
+  return J2000 + (year - 2000) * GREGORIAN_YEAR_DAYS;
+}
+
+/** Whether a Julian date is within the range calendar dates (JavaScript Dates) cover. */
+export function withinCalendar(jd: number): boolean {
+  return Math.abs(julianYear(jd) - 2000) < CALENDAR_LIMIT_YEARS;
+}
+
+/** "44,250 AD", "1,290,000 AD", "501 BC" (year 0 is 1 BC). */
+export function formatYear(jd: number): string {
+  const year = Math.floor(withinCalendar(jd) ? julianToDate(jd).getUTCFullYear() : julianYear(jd));
+  return year > 0 ? `${year.toLocaleString("en-US")} AD` : `${(1 - year).toLocaleString("en-US")} BC`;
+}

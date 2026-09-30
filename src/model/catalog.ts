@@ -9,6 +9,7 @@ import { poleFrameToEcliptic } from "../astro/rotation";
 import {
   COMET_COLOR,
   ASTEROID_COLOR,
+  BLACK_HOLE_COLOR,
   DEFAULT_DWARF_COLOR,
   DEFAULT_MOON_COLOR,
   DWARF_COLORS,
@@ -24,6 +25,7 @@ import smallBodyData from "../data/smallBodies.json";
 import spacecraftData from "../data/spacecraft.json";
 import missionData from "../data/missions.json";
 import orientationData from "../data/orientation.json";
+import galaxyData from "../data/galaxy.json";
 import type { OrientationModel } from "../astro/orientation";
 import { type Body, type BodyKind, type Discovery, type MissionInfo, type MoonCategory, type Motion, type MotionSegment, orbitAt, segmentAt, spliceSegment } from "./body";
 
@@ -76,8 +78,13 @@ const SATURN_RINGS = [
   { name: "F", innerRadius: 139_826, outerRadius: 140_612, color: "#f0dcc0", opacity: 0.1875 },
 ];
 
+const SPEED_OF_LIGHT_KM_S = 299_792.458;
+/** Stellar velocity dispersion around Sgr A* (km/s), for its sphere of influence. */
+const NUCLEAR_CLUSTER_DISPERSION_KM_S = 100;
+
 const LABEL_PRIORITY: Record<BodyKind, number> = {
   star: 0,
+  blackHole: 1,
   planet: 1,
   dwarf: 2,
   barycenter: 99,
@@ -156,7 +163,7 @@ function formatFitError(km: number): string {
 type PlanetTableEntry = (typeof planetData.tables)[number]["planets"][number];
 
 /** JPL approximate-positions table entry → secular Kepler elements. */
-function planetElements(planet: PlanetTableEntry): KeplerElements {
+function planetElements(planet: PlanetTableEntry, span: [number, number]): KeplerElements {
   const perDay = 1 / DAYS_PER_CENTURY;
   const [a, e, I, L, longPeri, longNode] = planet.elements;
   const [aDot, eDot, IDot, LDot, longPeriDot, longNodeDot] = planet.rates;
@@ -176,6 +183,7 @@ function planetElements(planet: PlanetTableEntry): KeplerElements {
       i: IDot * DEG * perDay,
       node: longNodeDot * DEG * perDay,
       argPeri: (longPeriDot - longNodeDot) * DEG * perDay,
+      span,
     },
     meanAnomalyTerms: extra ? { b: extra.b * DEG, c: extra.c * DEG, s: extra.s * DEG, f: extra.f * DEG } : undefined,
   };
@@ -200,12 +208,34 @@ export class Catalog {
       orientation: orientationFor(10),
       dataSource: "Fixed at the origin (heliocentric frame)",
     });
+    this.addGalacticCenter();
     this.addPlanets();
     // Small bodies before moons: Pluto's moons need Pluto.
     this.addSmallBodies();
     this.addMoons();
     this.addSpacecraft();
     this.linkHierarchy();
+  }
+
+  /**
+   * Sagittarius A*, the Galaxy's central black hole: drawn at the size of its
+   * event horizon (Schwarzschild radius), moving relative to the Sun as the
+   * Sun orbits it.
+   */
+  private addGalacticCenter(): void {
+    const gm = GM_SUN * galaxyData.sagittariusAStarMass;
+    this.add({
+      name: "Sagittarius A*",
+      designation: "Sgr A*",
+      kind: "blackHole",
+      radius: (2 * gm) / SPEED_OF_LIGHT_KM_S ** 2,
+      color: BLACK_HOLE_COLOR,
+      gm,
+      motion: { kind: "galacticCenter", model: galaxyData },
+      parent: this.sun,
+      orbitVisibility: "never",
+      dataSource: "Mass: GRAVITY Collaboration 2022; place and motion: Reid et al. 2019",
+    });
   }
 
   get(name: string): Body | undefined {
@@ -290,10 +320,10 @@ export class Catalog {
     const [modern, longSpan] = planetData.tables;
     for (const planet of longSpan.planets) {
       const modernPlanet = modern.planets.find((candidate) => candidate.name === planet.name)!;
-      const longSpanOrbit = new KeplerOrbit(planetElements(planet));
+      const longSpanOrbit = new KeplerOrbit(planetElements(planet, [longSpan.validFrom, longSpan.validTo]));
       const segments = (parent: Body): MotionSegment[] => [
         { start: Number.NEGATIVE_INFINITY, end: modern.validFrom, parent, motion: { kind: "kepler", orbit: longSpanOrbit } },
-        { start: modern.validFrom, end: modern.validTo, parent, motion: { kind: "kepler", orbit: new KeplerOrbit(planetElements(modernPlanet)) } },
+        { start: modern.validFrom, end: modern.validTo, parent, motion: { kind: "kepler", orbit: new KeplerOrbit(planetElements(modernPlanet, [modern.validFrom, modern.validTo])) } },
         { start: modern.validTo, end: Number.POSITIVE_INFINITY, parent, motion: { kind: "kepler", orbit: longSpanOrbit } },
       ];
       const source = `JPL approximate planetary elements (${modern.name}; ${longSpan.name} outside it)`;
@@ -616,6 +646,12 @@ export class Catalog {
     for (const body of this.bodies) {
       if (body.kind === "star") {
         body.frameRadius = Number.POSITIVE_INFINITY;
+        continue;
+      }
+      if (body.kind === "blackHole") {
+        // Sphere of influence: where its gravity outweighs the surrounding
+        // stars', GM/σ² with the nuclear star cluster's velocity dispersion.
+        body.frameRadius = body.gm! / NUCLEAR_CLUSTER_DISPERSION_KM_S ** 2;
         continue;
       }
       if (body.kind === "barycenter" || body.kind === "spacecraft") continue;

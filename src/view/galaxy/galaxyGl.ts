@@ -13,7 +13,10 @@ const VERTEX_SHADER = `
 attribute vec2 a_position;
 attribute vec4 a_color;
 attribute float a_size;
+attribute float a_inBar;
 uniform vec2 u_center;
+uniform vec2 u_armTurn;
+uniform vec2 u_barTurn;
 uniform float u_scale;
 uniform vec2 u_resolution;
 uniform float u_pixelRatio;
@@ -22,7 +25,9 @@ uniform vec2 u_sun;
 uniform vec2 u_gap;
 varying vec4 v_color;
 void main() {
-  vec2 screen = u_center + a_position * u_scale;
+  vec2 turn = a_inBar > 0.5 ? u_barTurn : u_armTurn;
+  vec2 turned = vec2(a_position.x * turn.x - a_position.y * turn.y, a_position.x * turn.y + a_position.y * turn.x);
+  vec2 screen = u_center + turned * u_scale;
   vec2 clip = screen / u_resolution * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
   gl_PointSize = max(1.0, a_size * u_pixelRatio);
@@ -49,6 +54,9 @@ export interface GalaxyView {
   centerY: number;
   /** CSS px per kpc. */
   scale: number;
+  /** How far (rad, counterclockwise in the display frame) the spiral pattern and the bar have turned since J2000. */
+  armAngle: number;
+  barAngle: number;
   /** Viewport, CSS px, and device pixels per CSS px. */
   width: number;
   height: number;
@@ -99,6 +107,7 @@ export class GalaxyGl {
     attribute("a_position", stars.positions, 2, gl.FLOAT, false);
     attribute("a_color", stars.colors, 4, gl.UNSIGNED_BYTE, true);
     attribute("a_size", stars.sizes, 1, gl.FLOAT, false);
+    attribute("a_inBar", stars.inBar, 1, gl.UNSIGNED_BYTE, false);
     this.count = stars.count;
   }
 
@@ -125,6 +134,8 @@ export class GalaxyGl {
     gl.useProgram(program);
     gl.uniform2f(this.uniform(program, "u_center"), view.centerX * r, view.centerY * r);
     gl.uniform1f(this.uniform(program, "u_scale"), view.scale * r);
+    gl.uniform2f(this.uniform(program, "u_armTurn"), Math.cos(view.armAngle), Math.sin(view.armAngle));
+    gl.uniform2f(this.uniform(program, "u_barTurn"), Math.cos(view.barAngle), Math.sin(view.barAngle));
     gl.uniform2f(this.uniform(program, "u_resolution"), width, height);
     gl.uniform1f(this.uniform(program, "u_pixelRatio"), r);
     // Zoomed out, many dots share each pixel and their light adds up: dim

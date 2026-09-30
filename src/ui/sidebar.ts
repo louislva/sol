@@ -1,6 +1,6 @@
 /** Info panel for the selected object. */
 
-import { AU_KM, DEG, EARTH_EQUATORIAL_RADIUS_KM, julianToDate } from "../astro/constants";
+import { AU_KM, DEG, EARTH_EQUATORIAL_RADIUS_KM, formatYear, GM_SUN, julianToDate } from "../astro/constants";
 import { LIGHT_YEAR_KM } from "../astro/galactic";
 import { type Body, orbitAt, segmentAt } from "../model/body";
 import { sameTarget, type Target, type World } from "../model/world";
@@ -15,6 +15,7 @@ const KIND_LABELS: Record<Body["kind"], string> = {
   asteroid: "Asteroid",
   comet: "Comet",
   spacecraft: "Spacecraft",
+  blackHole: "Supermassive black hole",
 };
 
 const MISSION_TYPES = {
@@ -271,8 +272,7 @@ function describeStar(index: number, world: World): Section[] {
     ["Space velocity", `${stars.speedOf(index).toFixed(1)} km/s${stars.radialVelocityKnown[index] ? "" : " (radial unknown)"}`],
   ];
   if (Math.abs(years) > 1) {
-    const when = julianToDate(t + years * 365.25).getUTCFullYear();
-    rows.push([years > 0 ? "Closest to Sun" : "Was closest", `${formatDistance(closest)} in ${when > 0 ? when : `${1 - when} BC`}`]);
+    rows.push([years > 0 ? "Closest to Sun" : "Was closest", `${formatDistance(closest)} in ${formatYear(t + years * 365.25)}`]);
   }
   const physical: Row[] = [];
   const spectralType = stars.spectralTypes[index];
@@ -292,7 +292,12 @@ function describeBody(body: Body, world: World, sunDistance: number, position: n
   const parent = segment.parent;
   const overview: Row[] = body.kind === "spacecraft"
     ? []
-    : [["Radius", body.radius === null ? "unknown" : formatKm(body.radius)]];
+    : body.kind === "blackHole"
+      ? [
+        ["Event horizon radius", formatKm(body.radius!)],
+        ["Mass", `${(body.gm! / GM_SUN / 1e6).toFixed(2)} million Suns`],
+      ]
+      : [["Radius", body.radius === null ? "unknown" : formatKm(body.radius)]];
   if (body.radii) overview.push(["Dimensions", `${body.radii.map((value) => formatKm(2 * value).replace(" km", "")).join(" × ")} km`]);
   if (body.kind !== "star") overview.push(["Distance from Sun", formatDistance(sunDistance)]);
   if (parent && parent.kind !== "star" && parent.kind !== "barycenter") {

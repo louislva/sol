@@ -1,5 +1,6 @@
 /** Bottom control bar: date, time transport, missions menu, status line. */
 
+import { dateToJulian, julianToDate, julianYear, withinCalendar, yearToJulian } from "../astro/constants";
 import { type Clock, MAX_SPEED, MIN_SPEED } from "../model/clock";
 
 export interface ControlHandlers {
@@ -10,7 +11,8 @@ export interface ControlHandlers {
   speed(magnitude: number): void;
   auto(): void;
   now(): void;
-  date(date: Date): void;
+  /** A Julian date (TDB) typed into the date editor. */
+  date(jd: number): void;
   /** A mission picked from the missions menu. */
   mission(name: string): void;
 }
@@ -29,23 +31,30 @@ const speedToSlider = (speed: number, limit: number) =>
   Math.round((Math.log(speed / MIN_SPEED) / Math.log(limit / MIN_SPEED)) * SLIDER_STEPS);
 
 /**
- * Parse a typed date as UTC: "2024-07-04", "1969-07-20 20:17",
- * "1969-07-20T20:17:40", negative years for BC ("-0500-03-01"), or "now".
+ * Parse a typed date (UTC) to a Julian date: "2024-07-04", "1969-07-20 20:17",
+ * "1969-07-20T20:17:40", negative years for BC ("-0500-03-01"), a bare year
+ * ("44250", "-3000000"), or "now". Years beyond the calendar's reach are
+ * counted in mean Gregorian years.
  */
-export function parseDateInput(text: string): Date | null {
-  const trimmed = text.trim();
-  if (/^now$/i.test(trimmed)) return new Date();
-  const match = /^([+-]?)(\d{1,6})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d*)?))?)?\s*(?:UTC|Z)?$/i.exec(trimmed);
+export function parseDateInput(text: string): number | null {
+  const trimmed = text.trim().replace(/,/g, "");
+  if (/^now$/i.test(trimmed)) return dateToJulian(new Date());
+  const match = /^([+-]?)(\d{1,8})(?:-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d*)?))?)?)?\s*(?:UTC|Z)?$/i.exec(trimmed);
   if (!match) return null;
-  const [, sign, year, month, day, hours = "0", minutes = "0", seconds = "0"] = match;
+  const [, sign, yearText, month = "1", day = "1", hours = "0", minutes = "0", seconds = "0"] = match;
+  const year = Number(sign + yearText);
+  const approximate = yearToJulian(year);
+  if (!withinCalendar(approximate)) return approximate + (Number(month) - 1) * 30.436875 + (Number(day) - 1);
   const date = new Date(0);
-  date.setUTCFullYear(Number(sign + year), Number(month) - 1, Number(day));
+  date.setUTCFullYear(year, Number(month) - 1, Number(day));
   date.setUTCHours(Number(hours), Number(minutes), 0, Number(seconds) * 1000);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) ? null : dateToJulian(date);
 }
 
-/** A date as the editor shows it: "1977-08-20 14:29" (UTC). */
-function formatDateInput(date: Date): string {
+/** A date as the editor shows it: "1977-08-20 14:29" (UTC), or just the year in deep time. */
+function formatDateInput(jd: number): string {
+  if (!withinCalendar(jd)) return String(Math.floor(julianYear(jd)));
+  const date = julianToDate(jd);
   const pad = (value: number, width = 2) => String(Math.abs(value)).padStart(width, "0");
   const year = date.getUTCFullYear();
   return `${year < 0 ? "-" : ""}${pad(year, 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} `
@@ -135,7 +144,7 @@ export class Controls {
   }
 
   /** The date last shown, for seeding the editor. */
-  private dateDisplayed = new Date();
+  private dateDisplayed = 0;
 
   setMissions(missions: readonly MissionListing[]): void {
     this.missionsList.replaceChildren(...missions.map((mission) => {
@@ -161,7 +170,7 @@ export class Controls {
     this.missionsButton.setAttribute("aria-expanded", String(open));
   }
 
-  setText(date: string, status: string, current: Date): void {
+  setText(date: string, status: string, current: number): void {
     this.dateDisplayed = current;
     if (this.date.textContent !== date) this.date.textContent = date;
     if (this.status.textContent !== status) this.status.textContent = status;
@@ -181,5 +190,6 @@ export function formatRate(secondsPerSecond: number): string {
   if (rate < 86_400 * 365.25) return `${sign}${(rate / (86_400 * 30.44)).toFixed(1)} mo/s`;
   const years = rate / (86_400 * 365.25);
   if (years < 1000) return `${sign}${years.toFixed(years < 100 ? 1 : 0)} yr/s`;
-  return `${sign}${(years / 1000).toFixed(years < 10_000 ? 1 : 0)}k yr/s`;
+  if (years < 1e6) return `${sign}${(years / 1000).toFixed(years < 10_000 ? 1 : 0)}k yr/s`;
+  return `${sign}${(years / 1e6).toFixed(1)}M yr/s`;
 }

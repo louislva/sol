@@ -20,7 +20,8 @@ const POINT_BUDGET = 3000;
 /** Angular resolution: step = this fraction of (distance / speed) relative to the frame. */
 const RESOLUTION = 0.02;
 const MIN_STEP_DAYS = 1 / 1440;
-const MAX_STEP_DAYS = 20;
+/** Steps are bounded only by the angular resolution; this is a backstop (about 3,000 years) for deep time. */
+const MAX_STEP_DAYS = 1e6;
 const SCREEN_MARGIN = 4000;
 
 interface Trail {

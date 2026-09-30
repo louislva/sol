@@ -163,6 +163,8 @@ export interface GalaxyModel {
   bulge: { scaleLengths: number[] };
   /** Mass of the central black hole, solar masses. */
   sagittariusAStarMass: number;
+  /** Angular speeds (km/s/kpc) at which the spiral pattern and the bar turn. */
+  patternSpeeds: { arms: number; bar: number };
   /** Average pitch angle of the four major arms (deg), weighted by segment length. */
   majorArmPitch: number;
   arms: SpiralArm[];
@@ -183,23 +185,37 @@ export interface SpiralArm {
   width: number;
 }
 
+const SECONDS_PER_DAY = 86_400;
+const KPC_KM = 1000 * PARSEC_KM;
+
 /**
  * The Galactic center's position relative to the Sun at time t (km, far
- * display frame). The Sun circles the center at Θ0 plus its peculiar
- * motion; over the ±250,000 years the clock spans, that orbit (one turn
- * per ~210 million years) is straight to within a fraction of a parsec.
+ * display frame). The Sun circles the center at Θ0 + V (clockwise seen from
+ * the north Galactic pole, once per ~200 million years), drifting slowly
+ * inward (U) and northward (W) — straight-line drifts, fine over the ±10
+ * million years the clock spans.
  */
 export function galacticCenterAt(model: GalaxyModel, t: number, out: Float64Array | number[]): void {
-  const years = (t - J2000) / 365.25;
-  const kmPerYear = 365.25 * 86_400;
+  const seconds = (t - J2000) * SECONDS_PER_DAY;
+  const r0 = model.r0 * KPC_KM;
   const { u, v, w } = model.solarMotion;
-  const x = model.r0 * 1000 * PARSEC_KM - u * kmPerYear * years;
-  const y = -(model.theta0 + v) * kmPerYear * years;
-  const z = -model.zSun * 1000 * PARSEC_KM - w * kmPerYear * years;
+  const angle = ((model.theta0 + v) / r0) * seconds;
+  const x = r0 * Math.cos(angle) - u * seconds;
+  const y = -r0 * Math.sin(angle);
+  const z = -model.zSun * KPC_KM - w * seconds;
   const p = transform(GALACTIC_TO_FAR, x, y, z);
   out[0] = p[0];
   out[1] = p[1];
   out[2] = p[2];
+}
+
+/**
+ * How far a pattern turning at `speed` (km/s/kpc) has rotated since J2000,
+ * in radians, positive counterclockwise seen from the north Galactic pole
+ * (the Galaxy turns clockwise, so this is negative after J2000).
+ */
+export function patternAngle(speed: number, t: number): number {
+  return (-speed / KPC_KM) * (t - J2000) * SECONDS_PER_DAY;
 }
 
 /**

@@ -21,7 +21,8 @@
  * The mix of star colors in each component (blue-white young stars in the
  * arms, amber old stars in the bulge) and the dot sizes are illustrative.
  * These dots are never pickable, named or searchable; the real stars are a
- * separate layer drawn on top.
+ * separate layer drawn on top. Positions are for J2000; the renderer turns
+ * the bar and the spiral pattern at their measured pattern speeds.
  */
 
 import { DEG } from "../../astro/constants";
@@ -36,6 +37,8 @@ export interface SyntheticStars {
   colors: Uint8Array;
   /** Dot diameter, CSS px. */
   sizes: Float32Array;
+  /** 1 for the bar and bulge (which turn with the bar), 0 for the disc and arms. */
+  inBar: Uint8Array;
 }
 
 const TOTAL = 320_000;
@@ -105,6 +108,7 @@ export function sampleGalaxy(model: GalaxyModel): SyntheticStars {
   const positions = new Float32Array(TOTAL * 2);
   const colors = new Uint8Array(TOTAL * 4);
   const sizes = new Float32Array(TOTAL);
+  const inBar = new Uint8Array(TOTAL);
   const rgb = Object.fromEntries(Object.entries(STAR_CLASS_COLORS).map(([key, hex]) => [
     key,
     [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16)),
@@ -145,6 +149,7 @@ export function sampleGalaxy(model: GalaxyModel): SyntheticStars {
     colors[index * 4 + 3] = Math.round(255 * (0.25 + 0.75 * brightness * brightness));
     const [small, large] = SIZE[component];
     sizes[index] = small + (large - small) * brightness * brightness;
+    inBar[index] = component === "bar" || component === "bulge" ? 1 : 0;
     index++;
   };
 
@@ -189,7 +194,7 @@ export function sampleGalaxy(model: GalaxyModel): SyntheticStars {
     emit("arms", x + nx * offset - ny * lengthwise, y + ny * offset + nx * lengthwise);
   }
 
-  return { count: TOTAL, positions, colors, sizes };
+  return { count: TOTAL, positions, colors, sizes, inBar };
 }
 
 interface ArmPath {
