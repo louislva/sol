@@ -7,7 +7,7 @@
 
 import { AU_KM } from "../../astro/constants";
 import { ASTEROID_POPULATION_COLOR } from "../../data/palette";
-import type { AsteroidPopulation } from "../../model/asteroidPopulation";
+import { ASTEROID_REGIONS, type AsteroidPopulation } from "../../model/asteroidPopulation";
 import type { SatellitePopulation } from "../../model/satellitePopulation";
 import type { Camera } from "../camera";
 import type { PickBuffer } from "../picking";
