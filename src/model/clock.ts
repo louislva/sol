@@ -38,7 +38,30 @@ const AUTO_SPEED_POINTS: Array<[number, number]> = [
 export const AUTO_SPEED_MAX = 1_000 * 31_557_600;
 
 export function autoSpeedForZoom(zoom: number): number {
-  const points = AUTO_SPEED_POINTS;
+  return Math.min(AUTO_SPEED_MAX, Math.max(1, interpolateLogLog(AUTO_SPEED_POINTS, zoom)));
+}
+
+/**
+ * Speed limit: the fastest any speed may run at this zoom, so that close in
+ * time can't race by at geological rates. About a month per second around
+ * Earth and the Moon, ten years among the inner planets, a thousand at
+ * Neptune, and the full 100,000 years only out among the stars.
+ */
+const SPEED_LIMIT_POINTS: Array<[number, number]> = [
+  [6.4e-5, 2_629_800],
+  [2.7e-6, 10 * 31_557_600],
+  [1.2e-7, 1_000 * 31_557_600],
+  [3.8e-12, 100_000 * 31_557_600],
+];
+/** Slowest limit, however far in: an hour per second (an orbit of the ISS in 1.5 s). */
+const SPEED_LIMIT_MIN = 3_600;
+
+export function speedLimitForZoom(zoom: number): number {
+  return Math.min(MAX_SPEED, Math.max(SPEED_LIMIT_MIN, interpolateLogLog(SPEED_LIMIT_POINTS, zoom)));
+}
+
+/** Piecewise-linear in log–log space over points sorted by decreasing zoom; extrapolates at either end. */
+function interpolateLogLog(points: Array<[number, number]>, zoom: number): number {
   const logZoom = Math.log(zoom);
   // Segment whose zoom range contains logZoom; extrapolate at either end.
   let segment = 0;
@@ -46,8 +69,7 @@ export function autoSpeedForZoom(zoom: number): number {
   const [z0, s0] = points[segment];
   const [z1, s1] = points[segment + 1];
   const t = (logZoom - Math.log(z0)) / (Math.log(z1) - Math.log(z0));
-  const speed = Math.exp(Math.log(s0) + t * (Math.log(s1) - Math.log(s0)));
-  return Math.min(AUTO_SPEED_MAX, Math.max(1, speed));
+  return Math.exp(Math.log(s0) + t * (Math.log(s1) - Math.log(s0)));
 }
 
 const YEAR_SECONDS = 31_557_600;
@@ -76,6 +98,8 @@ export class Clock {
   paused = false;
   /** Time stays within [start, end] (JD); reaching either end pauses. */
   bounds: [number, number] = [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY];
+  /** Fastest speed allowed at the current zoom; a faster chosen speed is kept but held to this. */
+  limit = MAX_SPEED;
   private autoSpeed = 1;
 
   constructor(start: Date = new Date()) {
@@ -84,7 +108,7 @@ export class Clock {
 
   /** Speed magnitude in effect, auto or manual. */
   get magnitude(): number {
-    return this.auto ? this.autoSpeed : this.speed;
+    return Math.min(this.limit, this.auto ? this.autoSpeed : this.speed);
   }
 
   /** Signed simulated seconds per real second (0 while paused). */
@@ -135,7 +159,7 @@ export class Clock {
       return;
     }
     const current = this.magnitude;
-    this.setSpeed(SPEED_LADDER.find((speed) => speed > current * 1.01) ?? MAX_SPEED);
+    this.setSpeed(Math.min(this.limit, SPEED_LADDER.find((speed) => speed > current * 1.01) ?? MAX_SPEED));
   }
 
   /**
@@ -144,6 +168,7 @@ export class Clock {
    */
   advance(realMs: number, zoom: number, pacedRate?: number): void {
     const stepMs = Math.min(realMs, MAX_STEP_MS);
+    this.limit = speedLimitForZoom(zoom);
     if (this.auto) {
       if (pacedRate === undefined) {
         this.autoSpeed = autoSpeedForZoom(zoom);

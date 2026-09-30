@@ -24,11 +24,11 @@ export interface MissionListing {
 }
 
 const SLIDER_STEPS = 1000;
-const LOG_SPEED_RANGE = Math.log(MAX_SPEED / MIN_SPEED);
 
-/** Slider position (0–SLIDER_STEPS) ↔ speed, logarithmic. */
-const sliderToSpeed = (value: number) => MIN_SPEED * Math.exp((value / SLIDER_STEPS) * LOG_SPEED_RANGE);
-const speedToSlider = (speed: number) => Math.round((Math.log(speed / MIN_SPEED) / LOG_SPEED_RANGE) * SLIDER_STEPS);
+/** Slider position (0–SLIDER_STEPS) ↔ speed, logarithmic from realtime to the current speed limit. */
+const sliderToSpeed = (value: number, limit: number) => MIN_SPEED * Math.exp((value / SLIDER_STEPS) * Math.log(limit / MIN_SPEED));
+const speedToSlider = (speed: number, limit: number) =>
+  Math.round((Math.log(speed / MIN_SPEED) / Math.log(limit / MIN_SPEED)) * SLIDER_STEPS);
 
 /**
  * Parse a typed date as UTC: "2024-07-04", "1969-07-20 20:17",
@@ -70,6 +70,9 @@ export class Controls {
   private readonly missionsPanel = document.getElementById("missions-panel")!;
   private readonly missionsList = document.getElementById("missions-list")!;
   private readonly handlers: ControlHandlers;
+  /** Speed at the slider's right end, as of the last clock update. */
+  private speedLimit = MAX_SPEED;
+  private sliderHeld = false;
 
   constructor(handlers: ControlHandlers) {
     this.handlers = handlers;
@@ -79,7 +82,10 @@ export class Controls {
     this.playPause.addEventListener("click", () => handlers.togglePause());
     this.autoButton.addEventListener("click", () => handlers.auto());
     document.getElementById("now-button")!.addEventListener("click", () => handlers.now());
-    this.slider.addEventListener("input", () => handlers.speed(sliderToSpeed(Number(this.slider.value))));
+    this.slider.addEventListener("input", () => handlers.speed(sliderToSpeed(Number(this.slider.value), this.speedLimit)));
+    this.slider.addEventListener("pointerdown", () => (this.sliderHeld = true));
+    window.addEventListener("pointerup", () => (this.sliderHeld = false));
+    window.addEventListener("pointercancel", () => (this.sliderHeld = false));
     // Arrow keys belong to the transport, not the focused slider.
     this.slider.addEventListener("keydown", (event) => {
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") event.preventDefault();
@@ -113,8 +119,9 @@ export class Controls {
     this.rewind.classList.toggle("active", playing && clock.direction < 0);
     this.fastForward.classList.toggle("active", playing && clock.direction > 0 && clock.magnitude > 1);
     this.autoButton.classList.toggle("active", clock.auto);
-    // Leave the slider alone while it is being dragged.
-    if (document.activeElement !== this.slider || clock.auto) this.slider.value = String(speedToSlider(clock.magnitude));
+    // The slider's right end is the zoom's speed limit. Leave it alone while it is being dragged.
+    this.speedLimit = clock.limit;
+    if (!this.sliderHeld || clock.auto) this.slider.value = String(speedToSlider(clock.magnitude, clock.limit));
     this.slider.classList.toggle("auto", clock.auto);
     const readout = formatRate(clock.direction * clock.magnitude);
     if (this.readout.textContent !== readout) this.readout.textContent = readout;

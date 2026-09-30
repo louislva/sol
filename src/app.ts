@@ -89,7 +89,7 @@ export class App {
       shuttle: (direction) => this.clock.shuttle(direction),
       togglePause: () => this.togglePause(),
       speed: (magnitude) => {
-        this.clock.setSpeed(magnitude);
+        this.clock.setSpeed(Math.min(this.clock.limit, magnitude));
         this.clock.paused = false;
       },
       auto: () => {
