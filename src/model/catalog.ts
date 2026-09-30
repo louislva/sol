@@ -375,6 +375,8 @@ export class Catalog {
         motion: { kind: "kepler", orbit },
         parent: this.require(moon.parent),
         moonCategory: category,
+        // Small moons are dots; their orbits would only clutter the planet.
+        orbitVisibility: category === "major" || category === "medium" ? "always" : "focus",
         orientation: orientationFor(moon.naifId),
         discovery: discoveries[moon.name],
         naifId: moon.naifId,

@@ -78,8 +78,6 @@ export interface ViewState {
   followed: Target | null;
   /** The body whose frame spacecraft trails are drawn in. */
   trailFrame: Target;
-  /** Filter for bodies the user chose to hide (moon detail level). */
-  isShown: (body: Body) => boolean;
 }
 
 export class Renderer {
@@ -133,7 +131,7 @@ export class Renderer {
 
     this.picks.clear();
     this.orbits.beginFrame();
-    profiler.measure("project", () => this.project(world, camera, state));
+    profiler.measure("project", () => this.project(world, camera));
 
     const galaxyAlpha = fade(camera.viewRadius, GALAXY_FADE[0], GALAXY_FADE[1]);
     profiler.measure("galaxy", () => this.drawGalaxy(world, camera, galaxyAlpha));
@@ -187,7 +185,7 @@ export class Renderer {
   }
 
   /** Screen position, displayed size, and occlusion for every shown body. */
-  private project(world: World, camera: Camera, state: ViewState): void {
+  private project(world: World, camera: Camera): void {
     const t = world.time;
     const zoom = camera.zoom;
     const eph = world.ephemeris;
@@ -196,7 +194,7 @@ export class Renderer {
 
     for (const body of world.bodies) {
       const index = body.index;
-      if (body.kind === "barycenter" || !state.isShown(body) || !existsAt(body, t)) continue;
+      if (body.kind === "barycenter" || !existsAt(body, t)) continue;
 
       const parent = visibleParentAt(body, t);
       // A body is never more visible than its parent: the moons (and

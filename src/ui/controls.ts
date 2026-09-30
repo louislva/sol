@@ -1,7 +1,6 @@
-/** Bottom control bar: date, time transport, moon-detail selector, status line. */
+/** Bottom control bar: date, time transport, missions menu, status line. */
 
 import { type Clock, MAX_SPEED, MIN_SPEED } from "../model/clock";
-import type { MoonCategory } from "../model/body";
 
 export interface ControlHandlers {
   /** Rewind (−1) or fast-forward (1). */
@@ -12,7 +11,6 @@ export interface ControlHandlers {
   auto(): void;
   now(): void;
   date(date: Date): void;
-  moons(category: MoonCategory): void;
   /** A mission picked from the missions menu. */
   mission(name: string): void;
 }
@@ -64,7 +62,6 @@ export class Controls {
   private readonly slider = document.getElementById("speed-slider") as HTMLInputElement;
   private readonly readout = document.getElementById("speed-readout")!;
   private readonly autoButton = document.getElementById("auto-speed")!;
-  private readonly moonButtons = [...document.querySelectorAll<HTMLButtonElement>(".moon-option[data-moons]")];
 
   private readonly missionsButton = document.getElementById("missions-button")!;
   private readonly missionsPanel = document.getElementById("missions-panel")!;
@@ -106,9 +103,6 @@ export class Controls {
     });
     this.dateInput.addEventListener("input", () => this.dateInput.classList.remove("invalid"));
     this.dateInput.addEventListener("blur", () => this.closeDateEditor());
-    for (const button of this.moonButtons) {
-      button.addEventListener("click", () => handlers.moons(button.dataset.moons as MoonCategory));
-    }
   }
 
   /** Reflect the clock in the transport. */
@@ -142,10 +136,6 @@ export class Controls {
 
   /** The date last shown, for seeding the editor. */
   private dateDisplayed = new Date();
-
-  setMoonCategory(category: MoonCategory): void {
-    for (const button of this.moonButtons) button.classList.toggle("active", button.dataset.moons === category);
-  }
 
   setMissions(missions: readonly MissionListing[]): void {
     this.missionsList.replaceChildren(...missions.map((mission) => {

@@ -150,7 +150,7 @@ whole orbit is inside the parent's disc are not even propagated.
 - Asteroid cloud: sorted by size (H), draws the largest N for the current
   scale; positions refreshed only when they could have moved ¼ px.
 - Satellites appear once Earth's satellite system spans a few pixels.
-- Moons: filter by category (major/medium/named/all).
+- Moons: all are drawn; only major and medium moons (radius > 10 km) always draw their orbits, the rest only when hovered or selected.
 - Labels: placed by priority, never overlapping.
 
 ## Browser Debugging

@@ -8,7 +8,7 @@
 
 import { AU_KM, J2000, julianToDate } from "./astro/constants";
 import { LIGHT_YEAR_KM } from "./astro/galactic";
-import { type Body, type MoonCategory, orbitAt, segmentAt } from "./model/body";
+import { type Body, orbitAt, segmentAt } from "./model/body";
 import { AUTO_SPEED_MAX, Clock, DEEP_TIME_YEARS, type SpeedMode } from "./model/clock";
 import { AsteroidPopulation } from "./model/asteroidPopulation";
 import type { EphemerisFile, EphemerisSeries, MissionFile } from "./model/catalog";
@@ -24,7 +24,6 @@ import { ReferenceFrameSelector } from "./view/referenceFrame";
 import { profiler } from "./view/profiler";
 import { Renderer, type ViewState } from "./view/renderer";
 
-const MOON_CATEGORY_ORDER: MoonCategory[] = ["major", "medium", "named", "minor"];
 /** Moving bodies drift under a resting pointer; re-test hover this often. */
 const HOVER_REFRESH_MS = 100;
 const UI_REFRESH_MS = 100;
@@ -46,7 +45,6 @@ export class App {
   private readonly sidebar: Sidebar;
   private readonly controls: Controls;
 
-  moonCategory: MoonCategory = "medium";
   /** Frame chosen automatically when nothing is followed. */
   private autoFrame: Body;
   /** Explicitly followed object; overrides the automatic frame. */
@@ -68,13 +66,12 @@ export class App {
     selected: null,
     followed: null,
     trailFrame: { type: "body", body: this.world.sun },
-    isShown: (body) => this.isShown(body),
   };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.renderer = new Renderer(canvas, this.world);
-    this.frames = new ReferenceFrameSelector(this.world, (body) => this.isShown(body));
+    this.frames = new ReferenceFrameSelector(this.world);
     this.autoFrame = this.world.earth;
     this.missionBodies = this.world.bodies.filter((body) => body.mission?.trajectoryFile);
     this.frameTarget = { type: "body", body: this.autoFrame };
@@ -98,7 +95,6 @@ export class App {
       },
       now: () => this.setDate(new Date()),
       date: (date) => this.setDate(date),
-      moons: (category) => this.setMoonCategory(category),
       mission: (name) => {
         const body = this.world.catalog.get(name);
         if (body) void this.watchFromLaunch(body);
@@ -113,7 +109,6 @@ export class App {
         const detail = mission.landing ? `landed on ${mission.landing.body}` : mission.status === "active" ? "active" : "ended";
         return { name: body.name, detail: `${year} · ${detail}` };
       }));
-    this.controls.setMoonCategory(this.moonCategory);
     this.bindInput();
     this.observeSize();
     this.frameEarthAndMoon();
@@ -317,11 +312,6 @@ export class App {
     window.visualViewport?.addEventListener("resize", resize);
   }
 
-  isShown(body: Body): boolean {
-    if (body.kind !== "moon") return true;
-    return MOON_CATEGORY_ORDER.indexOf(body.moonCategory ?? "minor") <= MOON_CATEGORY_ORDER.indexOf(this.moonCategory);
-  }
-
   // ── Commands (also used by the console API) ─────────────────────────
 
   select(target: Target | null): void {
@@ -400,11 +390,6 @@ export class App {
   togglePause(): void {
     this.clock.paused = !this.clock.paused;
     this.controls.setClock(this.clock);
-  }
-
-  setMoonCategory(category: MoonCategory): void {
-    this.moonCategory = category;
-    this.controls.setMoonCategory(category);
   }
 
   /** Center the view on a target at a zoom suited to it. */

@@ -21,10 +21,8 @@ const HYSTERESIS = 1.3;
 
 export class ReferenceFrameSelector {
   private readonly candidates: Body[];
-  private readonly isShown: (body: Body) => boolean;
 
-  constructor(world: World, isShown: (body: Body) => boolean) {
-    this.isShown = isShown;
+  constructor(world: World) {
     this.candidates = world.bodies.filter((body) => body.frameRadius > 0 && Number.isFinite(body.frameRadius));
   }
 
@@ -38,7 +36,7 @@ export class ReferenceFrameSelector {
     for (const body of this.candidates) {
       const slack = body === current ? HYSTERESIS : 1;
       if (viewRadius > VIEW_TO_REGION_LIMIT * body.frameRadius * slack) continue;
-      if (body.depth <= best.depth || !this.isShown(body) || !existsAt(body, t)) continue;
+      if (body.depth <= best.depth || !existsAt(body, t)) continue;
       const distance = Math.hypot(world.ephemeris.x(body) - centerX, world.ephemeris.y(body) - centerY);
       if (distance <= body.frameRadius * slack) best = body;
     }

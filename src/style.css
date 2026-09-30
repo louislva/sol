@@ -243,7 +243,7 @@ body {
   white-space: nowrap;
 }
 
-#moon-selector {
+#toolbar {
   display: flex;
   align-items: center;
   pointer-events: auto;
@@ -253,13 +253,7 @@ body {
   gap: 4px;
 }
 
-#moon-selector span {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-right: 4px;
-}
-
-.moon-option {
+.toolbar-button {
   background: transparent;
   border: none;
   color: var(--text-dim);
@@ -272,12 +266,12 @@ body {
   white-space: nowrap;
 }
 
-.moon-option:hover {
+.toolbar-button:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
 }
 
-.moon-option.active {
+.toolbar-button.active {
   background: rgba(255, 255, 255, 0.15);
   color: var(--text);
 }
@@ -472,18 +466,13 @@ body {
     font-size: 11px;
   }
 
-  #moon-selector {
+  #toolbar {
     max-width: 100%;
     gap: 1px;
     padding: 3px 5px;
   }
 
-  #moon-selector span {
-    font-size: 9px;
-    margin-right: 2px;
-  }
-
-  .moon-option {
+  .toolbar-button {
     font-size: 11px;
     padding: 6px 7px;
   }
@@ -494,13 +483,6 @@ body {
 }
 
 /* Missions menu */
-.selector-divider {
-  width: 1px;
-  height: 16px;
-  background: rgba(255, 255, 255, 0.12);
-  margin: 0 6px;
-}
-
 #missions-panel {
   position: absolute;
   bottom: calc(100% + 12px);
