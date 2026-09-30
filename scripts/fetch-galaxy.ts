@@ -11,6 +11,12 @@
  *   Table 3 ("Bayesian Fitting Results"), fit A5 (the paper's adopted
  *     model) — R0, the solar motion (U, V, W) and Θ0.
  *   Z⊙ = 5.5 pc, the Sun's height above the Galactic plane (Section 5).
+ *   Table 1 — the ~200 masers in high-mass star-forming regions whose
+ *     parallaxes the arm fits rest on, with the arm each is assigned to.
+ *     Masers whose parallax is uncertain by more than 25% are left out.
+ *
+ * The thin disc's exponential scale length, 2.6 kpc, is from Bland-Hawthorn
+ * & Gerhard 2016, ARA&A 54, 529 (Section 5.4.2).
  *
  * Output: src/data/galaxy.json
  * Run:    node scripts/fetch-galaxy.ts
@@ -24,6 +30,17 @@ import { writeJson } from "./lib/common.ts";
 
 const SOURCE_URL = "https://arxiv.org/e-print/1910.03357";
 const ADOPTED_FIT = "A5";
+const DISC_SCALE_LENGTH_KPC = 2.6;
+const MAX_MASER_PARALLAX_ERROR = 0.25;
+
+/** "13:11:16.8912" → degrees (hours × 15 when `hours`); "$-$62:45:55.008" → −62.765…. */
+function sexagesimal(cell: string, hours: boolean): number {
+  const text = cell.replace(/\$-\$/g, "-").replace(/\$/g, "").trim();
+  const negative = text.startsWith("-");
+  const [a, b, c] = text.replace(/^[+-]/, "").split(":").map(Number);
+  const value = (a + b / 60 + c / 3600) * (hours ? 15 : 1);
+  return negative ? -value : value;
+}
 
 /** "$-4.2\pm3.8$" → −4.2; "$15\rightarrow\p18$" → [15, 18]; "..." → null. */
 function value(cell: string): number | null {
@@ -85,6 +102,22 @@ async function main(): Promise<void> {
     return value(row[column])!;
   };
 
+  const masers = table(tex, "Parallaxes \\& Proper Motions of High-mass Star Forming Regions").flatMap((cells) => {
+    const [source, alias, ra, dec, parallaxCell, , , , arm] = cells;
+    const match = /(-?\d+\.\d+)\\pm\s*(\d+\.\d+)/.exec(parallaxCell.replace(/\$/g, ""));
+    if (!match) return [];
+    const [parallax, error] = [Number(match[1]), Number(match[2])];
+    if (!(parallax > 0) || error / parallax > MAX_MASER_PARALLAX_ERROR) return [];
+    return [[
+      source.replace(/\$([+-])\$/g, "$1"),
+      alias || null,
+      Number(sexagesimal(ra, true).toFixed(6)),
+      Number(sexagesimal(dec, false).toFixed(6)),
+      parallax,
+      arm.trim(),
+    ]];
+  });
+
   const zSun = /\\Zsun=(\d+(?:\.\d+)?)\\pm/.exec(tex);
   if (!zSun) throw new Error("Z_sun not found");
 
@@ -96,9 +129,12 @@ async function main(): Promise<void> {
     zSun: Number(zSun[1]) / 1000,
     theta0: fit(/^\\To/),
     solarMotion: { u: fit(/^\\U~/), v: fit(/^\\V~/), w: fit(/^\\W~/) },
+    discScaleLength: DISC_SCALE_LENGTH_KPC,
     arms,
+    maserColumns: ["source", "alias", "ra", "dec", "parallax", "arm"],
+    masers,
   }, true);
-  console.log(`Wrote ${arms.length} arms`);
+  console.log(`Wrote ${arms.length} arms and ${masers.length} masers`);
 }
 
 await main();

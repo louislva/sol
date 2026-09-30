@@ -88,6 +88,21 @@ export const STAR_CLASS_COLORS: Record<string, string> = {
 };
 export const DEFAULT_STAR_COLOR = "#dddddd";
 
-/** The Milky Way's spiral arms and center. */
-export const GALAXY_ARM_COLOR = "#8fa6d8";
+/**
+ * The Milky Way's spiral arms, one line color each like a metro map, after
+ * the scheme of Reid et al. 2019's Figure 1 (Perseus, black there, is green
+ * here). Norma and Outer are one arm around the far side of the Galaxy.
+ */
+export const ARM_COLORS: Record<string, string> = {
+  "3-kpc": "#f2c14e",
+  Norma: "#ef6461",
+  Outer: "#ef6461",
+  "Scutum-Centaurus": "#4f8fe6",
+  "Sagittarius-Carina": "#b07fe0",
+  Local: "#3ec6c6",
+  Perseus: "#7fcf6a",
+};
+/** Masers not assigned to one of the arms above (spurs, the bar region, unknown). */
+export const UNASSIGNED_ARM_COLOR = "#9a9a9a";
+export const GALACTIC_DISC_COLOR = "#8ea0c8";
 export const GALACTIC_CENTER_COLOR = "#ffd9a0";

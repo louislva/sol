@@ -95,7 +95,9 @@ top-down: positions about the Sun beyond 1,000 AU turn smoothly (by distance)
 into the Galactic plane, fully so beyond 60,000 AU (`astro/galactic.ts`
 `twist`). Distances from the Sun are kept, and stars and far-out spacecraft
 share one frame, so Voyager meets its stars where the map shows them. Stars
-are drawn within a slab around the height of whatever is framed. The clock
+are drawn within a slab around the height of whatever is framed. The Galaxy
+is a transit map: each arm a colored line (solid where measured, dashed where
+extrapolated), its masers the stations, names set along the arms. The clock
 spans ±250,000 years; outside 3000 BC – 3000 AD the planets' positions are
 extrapolations (the status line says so), and Earth satellites show only
 near their element epochs.

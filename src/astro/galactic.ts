@@ -155,7 +155,11 @@ export interface GalaxyModel {
   theta0: number;
   /** Sun's peculiar motion (toward the center, with rotation, toward the NGP), km/s. */
   solarMotion: { u: number; v: number; w: number };
+  /** Thin disc's exponential scale length, kpc. */
+  discScaleLength: number;
   arms: SpiralArm[];
+  /** Masers the arms were fitted to: [source, alias, RA°, Dec°, parallax mas, arm code]. */
+  masers: Array<(string | number | null)[]>;
 }
 
 export interface SpiralArm {
