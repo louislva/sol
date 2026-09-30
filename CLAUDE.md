@@ -39,6 +39,9 @@ npm run data:all   # Regenerate every data file (see scripts/README.md)
 npm run data:missions -- "Voyager 2"   # Regenerate one mission's trajectory
 ```
 
+Always push after committing (Vercel deploys each pushed branch). Before
+pushing, make sure the committed tree builds, not just the working copy.
+
 ## Visual Design
 - Background: `#000000` (black)
 - Orbits: Body color with low opacity
