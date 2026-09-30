@@ -3,8 +3,10 @@
  * Small-Body Database (main belt, trojans, NEOs, Centaurs, TNOs), stored as
  * structure-of-arrays and propagated in bulk.
  *
- * The catalog is sorted by absolute magnitude H, so any prefix of it is the
- * set of the largest objects: level of detail is simply "draw the first N".
+ * The catalog is sorted by absolute magnitude H, so level of detail is "draw
+ * the largest that can be in view", with a separate budget per region
+ * (ASTEROID_REGIONS): otherwise the big trans-Neptunian objects, which sort
+ * first, would use up the dots meant for the main belt.
  *
  * Data: public/data/asteroids.json (scripts/fetch-asteroids.ts).
  */
@@ -27,6 +29,19 @@ interface AsteroidFile {
   names: string[];
 }
 
+/**
+ * Regions by semi-major axis (AU), each with its own level-of-detail budget,
+ * sized from the on-screen area of the annulus `area` (AU) where its objects
+ * mostly are.
+ */
+export const ASTEROID_REGIONS: ReadonlyArray<{ name: string; below: number; area: [number, number] }> = [
+  { name: "near-Earth and Hungaria", below: 2.0, area: [1, 2] },
+  { name: "main belt", below: 3.3, area: [2.1, 3.3] },
+  { name: "outer belt, Hildas and Trojans", below: 6, area: [3.3, 5.5] },
+  { name: "Centaurs", below: 30, area: [6, 30] },
+  { name: "Kuiper belt and beyond", below: Number.POSITIVE_INFINITY, area: [30, 50] },
+];
+
 export class AsteroidPopulation {
   readonly count: number;
   readonly names: string[];
@@ -39,6 +54,9 @@ export class AsteroidPopulation {
   readonly x: Float64Array;
   readonly y: Float64Array;
   private readonly computedAt: Float64Array;
+  /** Index into ASTEROID_REGIONS of each asteroid. */
+  private readonly region: Uint8Array;
+  private readonly regionCounts = new Uint32Array(ASTEROID_REGIONS.length);
   /** Indices of the asteroids selected by the last `update`. */
   readonly visible: Uint32Array;
   visibleCount = 0;
@@ -83,6 +101,7 @@ export class AsteroidPopulation {
     this.meanMotion = new Float64Array(count);
     this.epoch = new Float64Array(count);
     this.maxSpeed = new Float64Array(count);
+    this.region = new Uint8Array(count);
 
     const c = file.columns;
     keep.forEach((source, index) => {
@@ -112,6 +131,7 @@ export class AsteroidPopulation {
       // Projection shortens in-plane distances by at most |cos i|.
       this.minDistance[index] = a * (1 - e) * Math.abs(cosI);
       this.maxDistance[index] = a * (1 + e);
+      this.region[index] = ASTEROID_REGIONS.findIndex((region) => c.a[source] < region.below);
     });
   }
 
@@ -122,25 +142,26 @@ export class AsteroidPopulation {
   }
 
   /**
-   * Select the asteroids among the first `count` whose orbits can reach the
-   * given range of distances from the Sun (the viewport's), and bring their
-   * positions up to date at time t. Each position is refreshed only once the
-   * asteroid could have moved `tolerancePx` on screen at `zoom` (px/km), and
-   * orbits that cannot reach the view are never propagated.
+   * Select, in each region, the `budgets[region]` largest asteroids whose
+   * orbits can reach the given range of distances from the Sun (the
+   * viewport's), and bring their positions up to date at time t. Each
+   * position is refreshed only once the asteroid could have moved
+   * `tolerancePx` on screen at `zoom` (px/km).
    */
-  update(t: number, count: number, zoom: number, viewMin: number, viewMax: number, tolerancePx = 0.5): void {
-    count = Math.min(count, this.count);
-    this.visibleCount = 0;
-    if (count === 0) return;
+  update(t: number, budgets: ArrayLike<number>, zoom: number, viewMin: number, viewMax: number, tolerancePx = 0.5): void {
     const toleranceKm = tolerancePx / zoom;
-    const { minDistance, maxDistance, computedAt, maxSpeed, visible } = this;
+    const { minDistance, maxDistance, computedAt, maxSpeed, visible, region, regionCounts } = this;
+    regionCounts.fill(0);
     let visibleCount = 0;
-    for (let index = 0; index < count; index++) {
+    for (let index = 0; index < this.count; index++) {
+      const r = region[index];
+      if (regionCounts[r] >= budgets[r]) continue;
       if (maxDistance[index] < viewMin || minDistance[index] > viewMax) continue;
       if (!(Math.abs(t - computedAt[index]) * maxSpeed[index] < toleranceKm)) {
         this.propagate(t, index, index + 1);
         computedAt[index] = t;
       }
+      regionCounts[r]++;
       visible[visibleCount++] = index;
     }
     this.visibleCount = visibleCount;

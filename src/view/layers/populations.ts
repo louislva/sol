@@ -20,23 +20,24 @@ const CONSTELLATION_DOT_RADIUS = 1;
 const squareSide = (radius: number) => radius * Math.sqrt(Math.PI);
 
 /**
- * Level of detail: roughly one asteroid per this many square pixels of the
- * main belt's on-screen area. The catalog is sorted by size, so fewer dots
- * means only the largest objects.
+ * Level of detail: in each region, roughly one asteroid per this many square
+ * pixels of the region's on-screen area, and at least a few hundred. The
+ * catalog is sorted by size, so fewer dots means only the largest objects.
  */
 const PX2_PER_ASTEROID = 6;
-const MIN_ASTEROIDS = 1500;
-/** Main belt annulus 2.1–3.3 au, in au². */
-const MAIN_BELT_AREA_AU2 = Math.PI * (3.3 ** 2 - 2.1 ** 2);
+const MIN_PER_REGION = 300;
 
 /** Earth's satellites appear once this orbital radius spans at least this many pixels. */
 const SATELLITE_SYSTEM_RADIUS_KM = 45_000;
 const SATELLITE_DETAIL_MIN_PX = 8;
 
-export function asteroidDetailCount(population: AsteroidPopulation, camera: Camera): number {
+/** Dot budget per asteroid region (see ASTEROID_REGIONS) at the current zoom. */
+function asteroidBudgets(camera: Camera): number[] {
   const auPx = AU_KM * camera.zoom;
-  const beltAreaPx = MAIN_BELT_AREA_AU2 * auPx * auPx;
-  return Math.min(population.count, Math.max(MIN_ASTEROIDS, Math.floor(beltAreaPx / PX2_PER_ASTEROID)));
+  return ASTEROID_REGIONS.map(({ area: [inner, outer] }) => {
+    const areaPx = Math.PI * (outer * outer - inner * inner) * auPx * auPx;
+    return Math.max(MIN_PER_REGION, Math.floor(areaPx / PX2_PER_ASTEROID));
+  });
 }
 
 export function drawAsteroids(
@@ -46,8 +47,6 @@ export function drawAsteroids(
   t: number,
   picks: PickBuffer
 ): void {
-  const count = asteroidDetailCount(population, camera);
-  if (count === 0) return;
   // Range of heliocentric distances the viewport spans.
   const left = camera.screenToWorldX(0);
   const right = camera.screenToWorldX(camera.width);
@@ -57,7 +56,7 @@ export function drawAsteroids(
   const nearestY = Math.max(top, Math.min(0, bottom));
   const viewMin = Math.hypot(nearestX, nearestY);
   const viewMax = Math.hypot(Math.max(Math.abs(left), Math.abs(right)), Math.max(Math.abs(top), Math.abs(bottom)));
-  population.update(t, count, camera.zoom, viewMin, viewMax);
+  population.update(t, asteroidBudgets(camera), camera.zoom, viewMin, viewMax);
 
   const { x: xs, y: ys, visible, visibleCount } = population;
   const zoom = camera.zoom;
