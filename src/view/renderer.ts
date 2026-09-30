@@ -17,6 +17,7 @@ import { drawSpacecraftIcon, drawStickFigure } from "./layers/icons";
 import { LabelLayer } from "./layers/labels";
 import { OrbitLayer } from "./layers/orbits";
 import {
+  ASTEROID_DOT_RADIUS,
   drawAsteroids,
   drawSatellites,
   satelliteDetailVisible,
@@ -43,6 +44,14 @@ const MIN_RADIUS_PX: Record<BodyKind, number> = {
 
 const ORBIT_ALPHA = 0.35;
 const ORBIT_LINE_WIDTH = 2;
+/**
+ * Small moons (below medium) are drawn like asteroid dots, and only once
+ * their orbit spans this range of on-screen radii (px) do they fade in.
+ */
+const SMALL_MOON_FADE_PX = [20, 40];
+const SMALL_MOON_ALPHA = 0.6;
+/** Small moons are labelled unasked once their orbit is this large on screen (px). */
+const SMALL_MOON_LABEL_REACH_PX = 400;
 /** Fade width (px) for bodies disappearing into a parent drawn at its minimum size. */
 const PARENT_FADE_PX = { star: 16, other: 4 };
 /** Labels fade out between these distances (px) from the parent's edge. */
@@ -100,6 +109,8 @@ export class Renderer {
   private readonly screenY: Float64Array;
   private readonly radiusPx: Float32Array;
   private readonly opacity: Float32Array;
+  /** On-screen apoapsis (px) of each projected body's closed orbit, else 0. */
+  private readonly orbitReachPx: Float32Array;
   private readonly projected: Uint8Array;
 
   private readonly frameScratch = new Float64Array(3);
@@ -115,6 +126,7 @@ export class Renderer {
     this.screenY = new Float64Array(count);
     this.radiusPx = new Float32Array(count);
     this.opacity = new Float32Array(count);
+    this.orbitReachPx = new Float32Array(count);
     this.projected = new Uint8Array(count);
     this.bodyTargets = world.bodies.map((body) => ({ type: "body", body }));
   }
@@ -218,7 +230,9 @@ export class Renderer {
       const offset = eph.resolve(body);
       const x = camera.worldToScreenX(eph.positions[offset]);
       const y = camera.worldToScreenY(eph.positions[offset + 1]);
-      const radius = Math.max((body.radius ?? 0) * zoom, minRadiusPx(body.kind, zoom));
+      const small = isSmallMoon(body);
+      const radius = Math.max((body.radius ?? 0) * zoom, small ? ASTEROID_DOT_RADIUS : minRadiusPx(body.kind, zoom));
+      this.orbitReachPx[index] = orbit?.isClosed ? orbit.apoapsis * zoom : 0;
       this.screenX[index] = x;
       this.screenY[index] = y;
       this.radiusPx[index] = radius;
@@ -238,6 +252,10 @@ export class Renderer {
           const fade = parent.kind === "star" ? PARENT_FADE_PX.star : PARENT_FADE_PX.other;
           opacity = Math.max(0, Math.min(1, (distance - parentRadius) / fade));
         }
+      }
+      if (small) {
+        const [from, to] = SMALL_MOON_FADE_PX;
+        opacity *= Math.max(0, Math.min(1, (this.orbitReachPx[index] - from) / (to - from)));
       }
       this.opacity[index] = parentShown ? Math.min(opacity, this.opacity[parent.index]) : opacity;
       this.projected[index] = 1;
@@ -307,6 +325,12 @@ export class Renderer {
           } else {
             drawSpacecraftIcon(ctx, body.mission?.icon ?? "probe", x, y, radius, color);
           }
+        } else if (isSmallMoon(body) && radius <= ASTEROID_DOT_RADIUS) {
+          // An unresolved small moon: the same faint square as an asteroid.
+          const side = ASTEROID_DOT_RADIUS * Math.sqrt(Math.PI);
+          ctx.globalAlpha = opacity * (hovered || selected ? 1 : SMALL_MOON_ALPHA);
+          ctx.fillStyle = color;
+          ctx.fillRect(x - side / 2, y - side / 2, side, side);
         } else {
           ctx.fillStyle = color;
           if (!body.radii || !this.traceEllipsoid(body, x, y, camera.zoom, t)) {
@@ -339,8 +363,11 @@ export class Renderer {
 
       // Label bodies drawn near their minimum size (larger discs speak for
       // themselves). Individual asteroids only get one close up.
-      const labelled = hovered || selected || (radius <= MIN_RADIUS_PX[body.kind] * 1.5
-        && (body.kind !== "asteroid" || camera.viewRadius < ASTEROID_LABEL_VIEW_RADIUS_KM));
+      // Small moons only get one well inside their planet's system.
+      const labelled = hovered || selected || (isSmallMoon(body)
+        ? this.orbitReachPx[index] >= SMALL_MOON_LABEL_REACH_PX
+        : radius <= MIN_RADIUS_PX[body.kind] * 1.5
+          && (body.kind !== "asteroid" || camera.viewRadius < ASTEROID_LABEL_VIEW_RADIUS_KM));
       if (labelled) {
         this.labels.add(
           body.name,
@@ -485,6 +512,11 @@ export class Renderer {
     }
     return result;
   }
+}
+
+/** Moons below the medium category, drawn and labelled like asteroids. */
+function isSmallMoon(body: Body): boolean {
+  return body.kind === "moon" && body.moonCategory !== "major" && body.moonCategory !== "medium";
 }
 
 /** Smallest on-screen radius for a body of this kind at this zoom. */

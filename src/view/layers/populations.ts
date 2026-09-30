@@ -12,7 +12,7 @@ import type { SatellitePopulation } from "../../model/satellitePopulation";
 import type { Camera } from "../camera";
 import type { PickBuffer } from "../picking";
 
-const ASTEROID_DOT_RADIUS = 1.5;
+export const ASTEROID_DOT_RADIUS = 1.5;
 const SATELLITE_DOT_RADIUS = 2;
 /** Constellation members are thousands strong; smaller dots keep Earth visible through them. */
 const CONSTELLATION_DOT_RADIUS = 1;

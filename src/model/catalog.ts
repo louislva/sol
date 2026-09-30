@@ -11,6 +11,7 @@ import {
   ASTEROID_COLOR,
   BLACK_HOLE_COLOR,
   DEFAULT_DWARF_COLOR,
+  ASTEROID_POPULATION_COLOR,
   DEFAULT_MOON_COLOR,
   DWARF_COLORS,
   MOON_COLORS,
@@ -400,7 +401,10 @@ export class Catalog {
         name: moon.name,
         kind: "moon",
         radius: moon.radius,
-        color: MOON_COLORS[moon.name] ?? DEFAULT_MOON_COLOR,
+        // Small moons look like the asteroids they probably once were.
+        color: category === "major" || category === "medium"
+          ? MOON_COLORS[moon.name] ?? DEFAULT_MOON_COLOR
+          : ASTEROID_POPULATION_COLOR,
         gm: moon.gm || null,
         motion: { kind: "kepler", orbit },
         parent: this.require(moon.parent),
