@@ -5,12 +5,14 @@
  */
 
 import { AU_KM } from "../astro/constants";
-import { LIGHT_YEAR_KM } from "../astro/galactic";
+import { LIGHT_YEAR_KM, PARSEC_KM } from "../astro/galactic";
 import { bodyFixedToEcliptic } from "../astro/orientation";
 import { type Body, type BodyKind, existsAt, orbitAt, segmentAt, visibleParentAt } from "../model/body";
 import { sameTarget, type Target, type World } from "../model/world";
 import type { Camera } from "./camera";
-import { GalaxyLayer } from "./layers/galaxy";
+import { GalaxyGl } from "./galaxy/galaxyGl";
+import { sampleGalaxy } from "./galaxy/syntheticGalaxy";
+import { GalacticCenterLayer } from "./layers/galacticCenter";
 import { drawSpacecraftIcon, drawStickFigure } from "./layers/icons";
 import { LabelLayer } from "./layers/labels";
 import { OrbitLayer } from "./layers/orbits";
@@ -38,7 +40,6 @@ const MIN_RADIUS_PX: Record<BodyKind, number> = {
   barycenter: 0,
 };
 
-const BACKGROUND = "#000000";
 const ORBIT_ALPHA = 0.35;
 const ORBIT_LINE_WIDTH = 2;
 /** Fade width (px) for bodies disappearing into a parent drawn at its minimum size. */
@@ -66,8 +67,10 @@ const SOL_FADE_MS = 300;
  */
 const SUN_SHRINK_ZOOM = 500 / (2_000 * AU_KM);
 const SUN_FAR_RADIUS_PX = 2.5;
-/** The Galaxy's arms fade in between these view radii. */
-const GALAXY_FADE = [1_500 * LIGHT_YEAR_KM, 6_000 * LIGHT_YEAR_KM];
+/** The synthetic Galaxy fades in between these view radii… */
+const GALAXY_FADE = [3_000 * LIGHT_YEAR_KM, 12_000 * LIGHT_YEAR_KM];
+/** …and thins out within this distance of the Sun, where the real stars are. */
+const GALAXY_GAP = [1_500 * LIGHT_YEAR_KM, 4_000 * LIGHT_YEAR_KM];
 
 export interface ViewState {
   hovered: Target | null;
@@ -86,7 +89,10 @@ export class Renderer {
   private readonly rings = new RingRenderer();
   private readonly labels = new LabelLayer();
   private readonly trails = new TrailLayer();
-  private readonly galaxy = new GalaxyLayer();
+  private readonly galaxy: GalaxyGl;
+  private galaxySampled = false;
+  private readonly galacticCenter = new GalacticCenterLayer();
+  private readonly centerScratch = new Float64Array(3);
   private readonly stars = new StarLayer();
   private readonly brightened = new Map<string, string>();
   private readonly bodyTargets: Target[];
@@ -103,7 +109,9 @@ export class Renderer {
   private lastFrameMs = performance.now();
 
   constructor(canvas: HTMLCanvasElement, world: World) {
-    this.ctx = canvas.getContext("2d", { alpha: false })!;
+    // Transparent: the synthetic Galaxy's WebGL canvas shows through from behind.
+    this.ctx = canvas.getContext("2d")!;
+    this.galaxy = new GalaxyGl(canvas);
     const count = world.bodies.length;
     this.screenX = new Float64Array(count);
     this.screenY = new Float64Array(count);
@@ -120,8 +128,7 @@ export class Renderer {
     this.lastFrameMs = now;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = BACKGROUND;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.setTransform(camera.pixelRatio, 0, 0, camera.pixelRatio, 0, 0);
 
     this.picks.clear();
@@ -129,14 +136,17 @@ export class Renderer {
     profiler.measure("project", () => this.project(world, camera, state));
 
     const galaxyAlpha = fade(camera.viewRadius, GALAXY_FADE[0], GALAXY_FADE[1]);
-    if (galaxyAlpha > 0) profiler.measure("galaxy", () => this.galaxy.draw(ctx, world, camera, this.labels, galaxyAlpha));
+    profiler.measure("galaxy", () => this.drawGalaxy(world, camera, galaxyAlpha));
+    this.galacticCenter.draw(ctx, world, camera, this.labels, galaxyAlpha);
     if (world.stars && this.viewReachesStars(world, camera)) {
       const stars = world.stars;
       const highlight = [state.hovered, state.selected].find((target) => target?.type === "star");
       world.positionAt(state.followed ?? state.trailFrame, world.time, this.frameScratch);
       const sliceZ = this.frameScratch[2];
       profiler.measure("stars", () => this.stars.draw(
-        ctx, stars, camera, world.time, this.picks, this.labels, sliceZ, highlight?.type === "star" ? highlight.index : -1, 1
+        ctx, stars, camera, world.time, this.picks, this.labels, sliceZ, highlight?.type === "star" ? highlight.index : -1,
+        // Soften into the synthetic Galaxy's texture at galactic scale.
+        1 - 0.45 * galaxyAlpha
       ));
     }
 
@@ -388,6 +398,32 @@ export class Renderer {
     if (!parent || !this.projected[parent.index]) return 1;
     const gap = Math.hypot(x - this.screenX[parent.index], y - this.screenY[parent.index]) - this.radiusPx[parent.index];
     return Math.max(0, Math.min(1, (gap - LABEL_FADE_END_PX) / (LABEL_FADE_START_PX - LABEL_FADE_END_PX)));
+  }
+
+  /** The synthetic Milky Way (WebGL, behind this canvas); sampled the first time it is needed. */
+  private drawGalaxy(world: World, camera: Camera, alpha: number): void {
+    if (alpha <= 0 || !this.galaxy.available) {
+      this.galaxy.clear();
+      return;
+    }
+    if (!this.galaxySampled) {
+      this.galaxy.setStars(sampleGalaxy(world.galaxy));
+      this.galaxySampled = true;
+    }
+    world.galacticCenter(this.centerScratch);
+    this.galaxy.draw({
+      centerX: camera.worldToScreenX(this.centerScratch[0]),
+      centerY: camera.worldToScreenY(this.centerScratch[1]),
+      scale: 1000 * PARSEC_KM * camera.zoom,
+      width: camera.width,
+      height: camera.height,
+      pixelRatio: camera.pixelRatio,
+      alpha,
+      sunX: camera.worldToScreenX(0),
+      sunY: camera.worldToScreenY(0),
+      gapInner: GALAXY_GAP[0] * camera.zoom,
+      gapOuter: GALAXY_GAP[1] * camera.zoom,
+    });
   }
 
   /** Could any star be in view? The nearest is light-years away; skip them all until then. */

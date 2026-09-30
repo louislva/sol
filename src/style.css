@@ -29,6 +29,17 @@ body {
   touch-action: none;
 }
 
+/* The synthetic Milky Way (WebGL), behind the main canvas. */
+#galaxy-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: -1;
+  pointer-events: none;
+}
+
 #canvas:active {
   cursor: grabbing;
 }

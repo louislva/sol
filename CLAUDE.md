@@ -21,6 +21,14 @@ If data is not available, either:
 
 Random/procedural generation of orbital parameters is NOT acceptable.
 
+**One exception: the synthetic Milky Way** (`src/view/galaxy/`). Nobody has
+seen the Galaxy from outside, so its face-on picture is drawn as a clearly
+separate, for-show layer of dots scattered by a fixed seed according to
+published structure (disc, bar, bulge, spiral arms; see `galaxy.json`).
+Those dots are not stars: they are never pickable, named or searchable, and
+real stars are always a separate layer on top. Don't extend synthetic data
+to anything that stands for a real, individual object.
+
 ## Development
 ```bash
 npm run dev        # Start dev server
@@ -63,7 +71,8 @@ src/
 │   ├── input.ts              # Pointer/wheel/touch/gesture → intents
 │   ├── renderer.ts           # Frame composition, projection, occlusion
 │   ├── picking.ts            # Hit testing against what was drawn
-│   └── layers/               # galaxy, stars, orbits, rings, labels, icons, populations, scale bar
+│   ├── galaxy/               # Synthetic Milky Way (for show) and its WebGL renderer
+│   └── layers/               # stars, galactic center, orbits, rings, labels, icons, populations, scale bar
 ├── ui/                       # Controls, info sidebar, console API, Wikipedia
 └── data/                     # Generated JSON (+ palette.ts); see scripts/README.md
 scripts/                      # Data fetchers (Node ≥ 22.18 runs .ts directly)
@@ -95,9 +104,10 @@ top-down: positions about the Sun beyond 1,000 AU turn smoothly (by distance)
 into the Galactic plane, fully so beyond 60,000 AU (`astro/galactic.ts`
 `twist`). Distances from the Sun are kept, and stars and far-out spacecraft
 share one frame, so Voyager meets its stars where the map shows them. Stars
-are drawn within a slab around the height of whatever is framed. The Galaxy
-is a transit map: each arm a colored line (solid where measured, dashed where
-extrapolated), its masers the stations, names set along the arms. The clock
+are drawn within a slab around the height of whatever is framed. At galactic
+scale a synthetic Milky Way (WebGL, behind the main canvas) fills in the face-on
+picture, thinning out near the Sun where the real stars are; Sagittarius A* is
+a black disc at its event horizon's size, never smaller than a few pixels. The clock
 spans ±250,000 years; outside 3000 BC – 3000 AD the planets' positions are
 extrapolations (the status line says so), and Earth satellites show only
 near their element epochs.

@@ -25,7 +25,7 @@ npm run data:moons        # or any single dataset
 | `fetch-ephemerides.ts` | `public/data/ephemerides.json`, `public/data/moon.json` | Horizons osculating elements: planets every 30 days and named small bodies yearly (1900–2100), the Moon every 2 days (1957–2100) |
 | `fetch-satellites.ts` | `public/data/satellites.json` | CelesTrak GP (OMM) elements, active satellites and constellation groups |
 | `fetch-stars.ts` | `public/data/stars.json` | SIMBAD (CDS) TAP: stars within 20 pc, naked-eye stars (V < 6.5) and IAU-named stars; names from the IAU Catalog of Star Names (WGSN) |
-| `fetch-galaxy.ts` | `src/data/galaxy.json` | Reid et al. 2019 (ApJ 885, 131), from the arXiv source: spiral-arm fits (Table 2), the maser parallaxes they rest on (Table 1), R0, Θ0 and the solar motion (fit A5); disc scale length from Bland-Hawthorn & Gerhard 2016 |
+| `fetch-galaxy.ts` | `src/data/galaxy.json` | Reid et al. 2019 (ApJ 885, 131), from the arXiv source: spiral-arm fits (Table 2), R0, Θ0 and the solar motion (fit A5); disc and bar from Bland-Hawthorn & Gerhard 2016, bulge from Wegg & Gerhard 2013, Sgr A*'s mass from GRAVITY 2022 |
 
 `fetch-orientation.ts` must run before `fetch-moons.ts` and
 `fetch-small-bodies.ts`, which read planet poles, GMs and radii from it.
@@ -77,13 +77,12 @@ npm run data:moons        # or any single dataset
   velocities faster than the Galaxy's escape speed are errors and are
   treated as unknown (zero). Voyager 2 passes Ross 248 at 1.7 light-years in
   44,000 AD, as NASA describes.
-- **The Galaxy** — drawn as a transit map. The spiral arms are Reid et al.'s
-  log-periodic fits, solid over the azimuths their masers cover and dashed
-  along the model's continuation 60° beyond, each over a band of its
-  measured width; the 179 masers with parallaxes good to 25% are the
-  stations. The disc is stepped at multiples of its exponential scale
-  length. The Sun circles the Galactic center at Θ0 plus its peculiar
-  motion.
+- **The Galaxy** — the one synthetic layer in the app, for show: a few
+  hundred thousand dots (not stars) scattered with a fixed seed according to
+  the structure above — exponential disc, bulge, long bar, and young stars
+  along Reid et al.'s arms (continued around the far side) with their
+  measured widths. The Sun circles the Galactic center at Θ0 plus its
+  peculiar motion.
 
 ## Verifying positions
 

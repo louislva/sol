@@ -37,8 +37,9 @@ const DOT_SCALE: Array<[number, number]> = [
   [10 * LIGHT_YEAR_KM, 1.8],
   [100 * LIGHT_YEAR_KM, 1],
   [3_000 * LIGHT_YEAR_KM, 0.4],
+  [30_000 * LIGHT_YEAR_KM, 0.25],
 ];
-const MIN_DISTANT_RADIUS = 0.6;
+const MIN_DISTANT_RADIUS = 0.5;
 
 function dotScale(viewRadius: number): number {
   if (viewRadius <= DOT_SCALE[0][0]) return DOT_SCALE[0][1];
