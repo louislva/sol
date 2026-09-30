@@ -80,8 +80,11 @@ npm run data:moons        # or any single dataset
 - **The Galaxy** — the one synthetic layer in the app, for show: a few
   hundred thousand dots (not stars) scattered with a fixed seed according to
   the structure above — exponential disc, bulge, long bar, and young stars
-  along Reid et al.'s arms (continued around the far side) with their
-  measured widths. The Sun circles the Galactic center at Θ0 plus its
+  along the arms. Reid et al. conclude the Galaxy has four major arms with an
+  average pitch of 10°; they are drawn as a symmetric four-arm spiral (the
+  assumption behind the familiar face-on pictures) rotated to fit the measured
+  arm segments, with Scutum–Centaurus and Perseus as the richer major pair
+  (Churchwell et al. 2009), plus the Local arm and the near and far 3-kpc arms. The Sun circles the Galactic center at Θ0 plus its
   peculiar motion.
 
 ## Verifying positions

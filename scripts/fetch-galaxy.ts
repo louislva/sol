@@ -11,6 +11,9 @@
  *   Table 3 ("Bayesian Fitting Results"), fit A5 (the paper's adopted
  *     model) — R0, the solar motion (U, V, W) and Θ0.
  *   Z⊙ = 5.5 pc, the Sun's height above the Galactic plane (Section 5).
+ *   Section 6.1 — the Milky Way is a four-arm spiral (Norma–Outer,
+ *     Scutum–Centaurus–OSC, Sagittarius–Carina, Perseus) with an average
+ *     pitch angle, weighted by segment length, of 10°.
  *
  * The rest of the Galaxy's structure, from reviews and surveys (entered
  * here as cited constants):
@@ -101,6 +104,9 @@ async function main(): Promise<void> {
     return value(row[column])!;
   };
 
+  const averagePitch = /average pitch angle\s+of\s+(\d+(?:\.\d+)?)\\deg\\?\s+for the major arms/.exec(tex);
+  if (!averagePitch) throw new Error("Average pitch angle not found");
+
   const zSun = /\\Zsun=(\d+(?:\.\d+)?)\\pm/.exec(tex);
   if (!zSun) throw new Error("Z_sun not found");
 
@@ -113,6 +119,7 @@ async function main(): Promise<void> {
     theta0: fit(/^\\To/),
     solarMotion: { u: fit(/^\\U~/), v: fit(/^\\V~/), w: fit(/^\\W~/) },
     ...STRUCTURE,
+    majorArmPitch: Number(averagePitch[1]),
     arms,
   }, true);
   console.log(`Wrote ${arms.length} arms`);

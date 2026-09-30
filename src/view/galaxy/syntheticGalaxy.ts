@@ -8,8 +8,16 @@
  *   - an exponential disc (scale length, Bland-Hawthorn & Gerhard 2016),
  *   - the boxy/peanut bulge (exponential scale lengths, Wegg & Gerhard 2013)
  *     and the long bar (half-length and angle, Bland-Hawthorn & Gerhard 2016),
- *   - young stars along the spiral arms (Reid et al. 2019's fits, with
- *     their width–radius relation, continued around the far side).
+ *   - young stars along the spiral arms. Reid et al. 2019 conclude the
+ *     Galaxy is a four-arm spiral (Norma–Outer, Scutum–Centaurus,
+ *     Sagittarius–Carina, Perseus) with an average pitch of 10°; here those
+ *     four are drawn as a symmetric pattern — the assumption behind the
+ *     familiar face-on pictures — rotated to fit their measured segments,
+ *     plus the isolated Local arm and the near and far 3-kpc arms by the
+ *     bar, with arm widths from Reid et al.'s width–radius relation.
+ *     Scutum–Centaurus and Perseus are drawn as the major arms, richer in
+ *     stars, as Spitzer's star counts found them (Churchwell et al. 2009,
+ *     PASP 121, 213) — the picture behind the familiar illustrations.
  * The mix of star colors in each component (blue-white young stars in the
  * arms, amber old stars in the bulge) and the dot sizes are illustrative.
  * These dots are never pickable, named or searchable; the real stars are a
@@ -17,7 +25,7 @@
  */
 
 import { DEG } from "../../astro/constants";
-import { armPoint, GALACTIC_TO_FAR, type GalaxyModel, type SpiralArm } from "../../astro/galactic";
+import { armPoint, GALACTIC_TO_FAR, type GalaxyModel } from "../../astro/galactic";
 import { STAR_CLASS_COLORS } from "../../data/palette";
 
 export interface SyntheticStars {
@@ -33,7 +41,7 @@ export interface SyntheticStars {
 const TOTAL = 320_000;
 const SEED = 0x5eed_0f_5a;
 /** Share of the dots in each component. */
-const SHARES = { bulge: 0.17, bar: 0.06, disc: 0.45, arms: 0.32 };
+const SHARES = { bulge: 0.16, bar: 0.06, disc: 0.4, arms: 0.38 };
 /** Spectral-class mix per component (illustrative). */
 const MIX: Record<keyof typeof SHARES, Array<[string, number]>> = {
   bulge: [["G", 0.15], ["K", 0.55], ["M", 0.3]],
@@ -48,11 +56,28 @@ const SIZE: Record<keyof typeof SHARES, [number, number]> = {
   disc: [0.8, 1.8],
   arms: [1, 2.6],
 };
-/** The disc is drawn out to this radius, and arms between these radii (kpc). */
+/** The disc is drawn out to this radius (kpc). */
 const DISC_EDGE_KPC = 16;
-const ARM_RADII_KPC: [number, number] = [3, 16];
-/** How far (deg of azimuth) each arm's fit is continued beyond its measured span. */
-const ARM_CONTINUATION_DEG = 100;
+/**
+ * Arms fade in and out over these radii (kpc): the major arms emerge from
+ * the ends of the bar (half-length 5 kpc), the minor ones a little farther
+ * out, and both thin toward the disc's edge.
+ */
+const MAJOR_ARM_TAPER_KPC = [4.5, 5.5, 11, 15];
+const MINOR_ARM_TAPER_KPC = [5, 6.5, 10, 14];
+/** Reid et al.'s major arms in order outward along any ray; the Outer arm is Norma one turn on. */
+const MAJOR_ARM_ORDER: Record<string, number> = {
+  Norma: 0,
+  "Scutum-Centaurus": 1,
+  "Sagittarius-Carina": 2,
+  Perseus: 3,
+  Outer: 4,
+};
+/** Star density of the major arms (Scutum–Centaurus, Perseus) relative to the others. */
+const MAJOR_ARM_WEIGHT = 2.5;
+const MAJOR_ARMS = new Set([MAJOR_ARM_ORDER["Scutum-Centaurus"], MAJOR_ARM_ORDER.Perseus]);
+/** The Local and 3-kpc arms' fits are continued this far (deg of azimuth) beyond their measured span. */
+const SEGMENT_CONTINUATION_DEG = 30;
 
 /** Reid et al. 2019: arm width (Gaussian 1σ, kpc) grows with Galactocentric radius. */
 function armWidth(radiusKpc: number): number {
@@ -92,8 +117,8 @@ export function sampleGalaxy(model: GalaxyModel): SyntheticStars {
   const along = [-Math.cos(barAngle), Math.sin(barAngle)];
   const across = [Math.sin(barAngle), Math.cos(barAngle)];
   const [bulgeAlong, bulgeAcross] = model.bulge.scaleLengths;
-  const arms = continuedArms(model.arms);
-  const armLengths = arms.map((arm) => arm.length);
+  const arms = armPaths(model);
+  const armLengths = arms.map((arm) => arm.length * arm.weight);
   const totalArmLength = armLengths.reduce((sum, length) => sum + length, 0);
 
   let index = 0;
@@ -148,13 +173,17 @@ export function sampleGalaxy(model: GalaxyModel): SyntheticStars {
     emit("disc", radius * Math.cos(angle), radius * Math.sin(angle));
   }
   for (let n = 0; n < counts.arms; n++) {
-    // An arm in proportion to its length, then a point along it, spread
-    // across the arm by its width.
+    // An arm in proportion to its length, then a point along it (thinning
+    // where the arm tapers), spread across the arm by its width.
     let pick = rand() * totalArmLength;
     let armIndex = 0;
     while (armIndex < arms.length - 1 && pick > armLengths[armIndex]) pick -= armLengths[armIndex++];
     const arm = arms[armIndex];
-    const [x, y, nx, ny, radius] = arm.at(pick);
+    const [x, y, nx, ny, radius, taper] = arm.at(pick / arm.weight);
+    if (rand() > taper) {
+      n--;
+      continue;
+    }
     const offset = gaussian() * armWidth(radius);
     const lengthwise = gaussian() * 0.15;
     emit("arms", x + nx * offset - ny * lengthwise, y + ny * offset + nx * lengthwise);
@@ -163,44 +192,95 @@ export function sampleGalaxy(model: GalaxyModel): SyntheticStars {
   return { count: TOTAL, positions, colors, sizes };
 }
 
-interface ContinuedArm {
+interface ArmPath {
   length: number;
-  /** Point at arc length s: x, y (kpc, Galactic axes about the center), unit normal, radius. */
-  at(s: number): [number, number, number, number, number];
+  /** Relative star density. */
+  weight: number;
+  /** Point at arc length s: x, y (kpc, Galactic axes about the center), unit normal, radius, taper (0–1). */
+  at(s: number): [number, number, number, number, number, number];
 }
 
-/** Each arm's fit, continued ARM_CONTINUATION_DEG beyond its measured span, within ARM_RADII_KPC. */
-function continuedArms(arms: SpiralArm[]): ContinuedArm[] {
-  return arms.map((arm) => {
-    const points: Array<[number, number]> = [];
-    for (let beta = arm.betaMin - ARM_CONTINUATION_DEG; beta <= arm.betaMax + ARM_CONTINUATION_DEG; beta += 0.5) {
-      const [x, y] = armPoint(arm, beta);
+/** A polyline with a taper per point, as an ArmPath. */
+function path(points: Array<[number, number]>, taper: (radius: number, fraction: number) => number, weight = 1): ArmPath {
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++) {
+    lengths.push(lengths[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+  }
+  const length = lengths[lengths.length - 1];
+  return {
+    length,
+    weight,
+    at(s: number) {
+      let i = 1;
+      while (i < lengths.length - 1 && lengths[i] < s) i++;
+      const [x0, y0] = points[i - 1];
+      const [x1, y1] = points[i];
+      const t = Math.min(1, (s - lengths[i - 1]) / (lengths[i] - lengths[i - 1] || 1));
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const norm = Math.hypot(dx, dy) || 1;
+      const x = x0 + dx * t;
+      const y = y0 + dy * t;
       const radius = Math.hypot(x, y);
-      if (radius >= ARM_RADII_KPC[0] && radius <= ARM_RADII_KPC[1]) points.push([x, y]);
+      return [x, y, -dy / norm, dx / norm, radius, taper(radius, s / length)];
+    },
+  };
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * The arms: four symmetric major arms, the Local arm, and the 3-kpc pair.
+ *
+ * A major arm k (0–3, spaced 90°) is the log spiral
+ *   ln R = c + k·(π/2)·tan ψ − β·tan ψ,
+ * with ψ the average pitch; c, the pattern's one free parameter, is the
+ * least-squares fit to Reid et al.'s measured major-arm segments.
+ */
+function armPaths(model: GalaxyModel): ArmPath[] {
+  const tanPitch = Math.tan(model.majorArmPitch * DEG);
+  const quarter = (Math.PI / 2) * tanPitch;
+  let sum = 0;
+  let samples = 0;
+  for (const arm of model.arms) {
+    const k = MAJOR_ARM_ORDER[arm.name];
+    if (k === undefined) continue;
+    for (let beta = arm.betaMin; beta <= arm.betaMax; beta += 1) {
+      const radius = Math.hypot(...armPoint(arm, beta));
+      sum += Math.log(radius) + beta * DEG * tanPitch - k * quarter;
+      samples++;
     }
-    const lengths = [0];
-    for (let i = 1; i < points.length; i++) {
-      // A gap (the arm left the radius range and came back) is not a segment.
-      const step = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-      lengths.push(lengths[i - 1] + (step < 1 ? step : 0));
+  }
+  const c = sum / samples;
+  const taper = ([taperIn, fullIn, fullOut, taperOut]: number[]) => (radius: number) =>
+    smoothstep(taperIn, fullIn, radius) * (1 - smoothstep(fullOut, taperOut, radius));
+
+  const paths: ArmPath[] = [];
+  for (let k = 0; k < 4; k++) {
+    const major = MAJOR_ARMS.has(k);
+    const radii = major ? MAJOR_ARM_TAPER_KPC : MINOR_ARM_TAPER_KPC;
+    const points: Array<[number, number]> = [];
+    for (let radius = radii[0]; radius <= radii[3]; radius += 0.02) {
+      const beta = (c + k * quarter - Math.log(radius)) / tanPitch;
+      points.push([-radius * Math.cos(beta), radius * Math.sin(beta)]);
     }
-    const length = lengths[lengths.length - 1];
-    return {
-      length,
-      at(s: number) {
-        let i = 1;
-        while (i < lengths.length - 1 && lengths[i] < s) i++;
-        const [x0, y0] = points[i - 1];
-        const [x1, y1] = points[i];
-        const span = lengths[i] - lengths[i - 1] || 1;
-        const t = Math.min(1, (s - lengths[i - 1]) / span);
-        const dx = x1 - x0;
-        const dy = y1 - y0;
-        const norm = Math.hypot(dx, dy) || 1;
-        const x = x0 + dx * t;
-        const y = y0 + dy * t;
-        return [x, y, -dy / norm, dx / norm, Math.hypot(x, y)];
-      },
-    };
-  });
+    paths.push(path(points, taper(radii), major ? MAJOR_ARM_WEIGHT : 1));
+  }
+
+  // The isolated Local arm, and the 3-kpc arm with its mirror image on the
+  // far side of the center: their own fits, tapering at both ends.
+  const segmentTaper = (_radius: number, fraction: number) => smoothstep(0, 0.2, fraction) * smoothstep(0, 0.2, 1 - fraction);
+  for (const arm of model.arms) {
+    if (arm.name !== "Local" && arm.name !== "3-kpc") continue;
+    const points: Array<[number, number]> = [];
+    for (let beta = arm.betaMin - SEGMENT_CONTINUATION_DEG; beta <= arm.betaMax + SEGMENT_CONTINUATION_DEG; beta += 0.5) {
+      points.push(armPoint(arm, beta));
+    }
+    paths.push(path(points, segmentTaper));
+    if (arm.name === "3-kpc") paths.push(path(points.map(([x, y]) => [-x, -y]), segmentTaper));
+  }
+  return paths;
 }

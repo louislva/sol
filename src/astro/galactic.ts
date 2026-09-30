@@ -163,6 +163,8 @@ export interface GalaxyModel {
   bulge: { scaleLengths: number[] };
   /** Mass of the central black hole, solar masses. */
   sagittariusAStarMass: number;
+  /** Average pitch angle of the four major arms (deg), weighted by segment length. */
+  majorArmPitch: number;
   arms: SpiralArm[];
 }
 
