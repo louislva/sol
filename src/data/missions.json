@@ -1,0 +1,662 @@
+{
+  "source": "JPL Horizons",
+  "generatedAt": "2026-09-29T20:39:24.493Z",
+  "missions": [
+    {
+      "name": "Voyager 1",
+      "spkid": -31,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2443392.0833333335,
+      "end": null,
+      "finalParent": "Sun",
+      "escapes": true,
+      "landing": null,
+      "file": "data/missions/voyager-1.json"
+    },
+    {
+      "name": "Voyager 2",
+      "spkid": -32,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2443376.1479166667,
+      "end": null,
+      "finalParent": "Sun",
+      "escapes": true,
+      "landing": null,
+      "file": "data/missions/voyager-2.json"
+    },
+    {
+      "name": "Pioneer 10",
+      "spkid": -23,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Contact lost 2003; coasting out of the solar system",
+      "start": 2441379.5868055555,
+      "end": 2469807.50625,
+      "finalParent": "Sun",
+      "escapes": true,
+      "landing": null,
+      "file": "data/missions/pioneer-10.json"
+    },
+    {
+      "name": "Pioneer 11",
+      "spkid": -24,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Contact lost 1995; coasting out of the solar system",
+      "start": 2441778.601388889,
+      "end": 2469807.50625,
+      "finalParent": "Sun",
+      "escapes": true,
+      "landing": null,
+      "file": "data/missions/pioneer-11.json"
+    },
+    {
+      "name": "New Horizons",
+      "spkid": -98,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2453755.327777778,
+      "end": 2469807.4993055556,
+      "finalParent": "Sun",
+      "escapes": true,
+      "landing": null,
+      "file": "data/missions/new-horizons.json"
+    },
+    {
+      "name": "Galileo",
+      "spkid": -77,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "ended",
+      "fate": "Deliberately entered Jupiter's atmosphere, 2003",
+      "start": 2447818.5625,
+      "end": 2452912.9993055556,
+      "finalParent": "Jupiter",
+      "landing": null,
+      "file": "data/missions/galileo.json"
+    },
+    {
+      "name": "Juno",
+      "spkid": -61,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2455779.222222222,
+      "end": 2462045.4993055556,
+      "finalParent": "Jupiter",
+      "landing": null,
+      "file": "data/missions/juno.json"
+    },
+    {
+      "name": "Cassini",
+      "spkid": -82,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "ended",
+      "fate": "Deliberately entered Saturn's atmosphere, 2017",
+      "start": 2450736.894444444,
+      "end": 2458011.997916667,
+      "finalParent": "Saturn",
+      "landing": null,
+      "file": "data/missions/cassini.json"
+    },
+    {
+      "name": "Huygens",
+      "spkid": -150,
+      "type": "lander",
+      "icon": "lander",
+      "status": "ended",
+      "fate": "Landed on Titan, 14 Jan 2005 (Horizons: pre-landing predicted descent)",
+      "start": 2453364.5847222223,
+      "end": null,
+      "finalParent": "Titan",
+      "landing": {
+        "body": "Titan",
+        "time": 2453385.002777778,
+        "position": [
+          -2422.66008,
+          732.3478247,
+          -474.3519767
+        ],
+        "latitude": -10.615331,
+        "longitude": 163.18042
+      },
+      "file": "data/missions/huygens.json"
+    },
+    {
+      "name": "Ulysses",
+      "spkid": -55,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Switched off 2009; still orbiting the Sun",
+      "start": 2448171.2958333334,
+      "end": 2469807.9993055556,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/ulysses.json"
+    },
+    {
+      "name": "Europa Clipper",
+      "spkid": -159,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2460598.177777778,
+      "end": 2464208.6979166665,
+      "finalParent": "Jupiter",
+      "landing": null,
+      "file": "data/missions/europa-clipper.json"
+    },
+    {
+      "name": "JUICE",
+      "spkid": -28,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2460049.0305555556,
+      "end": 2463068.770138889,
+      "finalParent": "Jupiter",
+      "landing": null,
+      "file": "data/missions/juice.json"
+    },
+    {
+      "name": "MESSENGER",
+      "spkid": -236,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "ended",
+      "fate": "Impacted Mercury, 30 Apr 2015",
+      "start": 2453220.8020833335,
+      "end": 2457144.283333333,
+      "finalParent": "Mercury",
+      "landing": null,
+      "file": "data/missions/messenger.json"
+    },
+    {
+      "name": "BepiColombo",
+      "spkid": -121,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2458411.5930555556,
+      "end": 2461506.5,
+      "finalParent": "Mercury",
+      "landing": null,
+      "file": "data/missions/bepicolombo.json"
+    },
+    {
+      "name": "Parker Solar Probe",
+      "spkid": -96,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2458342.845138889,
+      "end": 2462502.5,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/parker-solar-probe.json"
+    },
+    {
+      "name": "Solar Orbiter",
+      "spkid": -144,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2458889.70625,
+      "end": 2462825.6944444445,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/solar-orbiter.json"
+    },
+    {
+      "name": "STEREO-A",
+      "spkid": -234,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2454034.501388889,
+      "end": 2461392.5,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/stereo-a.json"
+    },
+    {
+      "name": "Genesis",
+      "spkid": -47,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Sample capsule returned to Earth, 2004",
+      "start": 2452133.167361111,
+      "end": 2458850.4993055556,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/genesis.json"
+    },
+    {
+      "name": "NEAR Shoemaker",
+      "spkid": -93,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Landed on Eros, 12 Feb 2001 — the first landing on an asteroid",
+      "start": 2450132.584027778,
+      "end": null,
+      "finalParent": "Eros",
+      "landing": {
+        "body": "Eros",
+        "time": 2451953.3232203233,
+        "position": [
+          0.8020015854,
+          4.871999883,
+          -4.146999831
+        ],
+        "latitude": -40.026461,
+        "longitude": 80.652121
+      },
+      "file": "data/missions/near-shoemaker.json"
+    },
+    {
+      "name": "Rosetta",
+      "spkid": -226,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Set down on comet 67P, 30 Sep 2016",
+      "start": 2453066.894444444,
+      "end": null,
+      "finalParent": "Churyumov–Gerasimenko",
+      "landing": {
+        "body": "Churyumov–Gerasimenko",
+        "time": 2457661.94546939,
+        "position": [
+          1.086359984,
+          -1.339257527,
+          1.062289606
+        ],
+        "latitude": 31.633491,
+        "longitude": -50.952215
+      },
+      "file": "data/missions/rosetta.json"
+    },
+    {
+      "name": "Dawn",
+      "spkid": -203,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Out of fuel 2018; left in orbit around Ceres",
+      "start": 2454371.0284722224,
+      "end": 2467552.4993055556,
+      "finalParent": "Ceres",
+      "landing": null,
+      "file": "data/missions/dawn.json"
+    },
+    {
+      "name": "Hayabusa",
+      "spkid": -130,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Returned samples of Itokawa to Earth, 2010",
+      "start": 2454857.68125,
+      "end": 2455361.0770833334,
+      "finalParent": "Earth",
+      "landing": null,
+      "file": "data/missions/hayabusa.json"
+    },
+    {
+      "name": "Hayabusa2",
+      "spkid": -37,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2456994.7604166665,
+      "end": 2461371.4993055556,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/hayabusa2.json"
+    },
+    {
+      "name": "OSIRIS-REx",
+      "spkid": -64,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2457640.4631944443,
+      "end": 2462583.332638889,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/osiris-rex.json"
+    },
+    {
+      "name": "Deep Impact",
+      "spkid": -140,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Contact lost 2013",
+      "start": 2453383.308333333,
+      "end": 2458858.4993055556,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/deep-impact.json"
+    },
+    {
+      "name": "Stardust",
+      "spkid": -29,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Returned comet dust to Earth 2006; retired 2011",
+      "start": 2451217.3979166667,
+      "end": 2455633.4993055556,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/stardust.json"
+    },
+    {
+      "name": "DART",
+      "spkid": -135,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "ended",
+      "fate": "Impacted Dimorphos, moon of Didymos, 26 Sep 2022",
+      "start": 2459542.8041666667,
+      "end": 2459849.469134074,
+      "finalParent": "Didymos",
+      "landing": null,
+      "file": "data/missions/dart.json"
+    },
+    {
+      "name": "Lucy",
+      "spkid": -49,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2459503.9402777776,
+      "end": 2463690.226388889,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/lucy.json"
+    },
+    {
+      "name": "Psyche (spacecraft)",
+      "spkid": -255,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2460231.140972222,
+      "end": 2462179.075,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/psyche-spacecraft.json"
+    },
+    {
+      "name": "Mars Reconnaissance Orbiter",
+      "spkid": -74,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2453595.029166667,
+      "end": 2461326.0229166667,
+      "finalParent": "Mars",
+      "landing": null,
+      "file": "data/missions/mars-reconnaissance-orbiter.json"
+    },
+    {
+      "name": "Mars Odyssey",
+      "spkid": -53,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2452007.1847222224,
+      "end": 2461426.4993055556,
+      "finalParent": "Mars",
+      "landing": null,
+      "file": "data/missions/mars-odyssey.json"
+    },
+    {
+      "name": "MAVEN",
+      "spkid": -202,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2456615.3069444443,
+      "end": 2461100.540972222,
+      "finalParent": "Mars",
+      "landing": null,
+      "file": "data/missions/maven.json"
+    },
+    {
+      "name": "Mars Express",
+      "spkid": -41,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2452793.300694444,
+      "end": 2463598.5,
+      "finalParent": "Mars",
+      "landing": null,
+      "file": "data/missions/mars-express.json"
+    },
+    {
+      "name": "ExoMars TGO",
+      "spkid": -143,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2457461.84375,
+      "end": 2465792.7708333335,
+      "finalParent": "Mars",
+      "landing": null,
+      "file": "data/missions/exomars-tgo.json"
+    },
+    {
+      "name": "Curiosity",
+      "spkid": -76,
+      "type": "lander",
+      "icon": "lander",
+      "status": "active",
+      "start": 2455892.1618055557,
+      "end": null,
+      "finalParent": "Mars",
+      "landing": {
+        "body": "Mars",
+        "time": 2456145.72138533,
+        "position": [
+          -2489.785249,
+          2286.311503,
+          -271.3732785
+        ],
+        "latitude": -4.5899442,
+        "longitude": 137.43947
+      },
+      "file": "data/missions/curiosity.json"
+    },
+    {
+      "name": "Perseverance",
+      "spkid": -168,
+      "type": "lander",
+      "icon": "lander",
+      "status": "active",
+      "start": 2459061.0368055557,
+      "end": null,
+      "finalParent": "Mars",
+      "landing": {
+        "body": "Mars",
+        "time": 2459264.6126417196,
+        "position": [
+          700.3281796,
+          3140.188385,
+          1074.370549
+        ],
+        "latitude": 18.465807,
+        "longitude": 77.427583
+      },
+      "file": "data/missions/perseverance.json"
+    },
+    {
+      "name": "InSight",
+      "spkid": -189,
+      "type": "lander",
+      "icon": "lander",
+      "status": "ended",
+      "fate": "Landed on Mars, 26 Nov 2018; mission ended 2022",
+      "start": 2458244.0277777775,
+      "end": null,
+      "finalParent": "Mars",
+      "landing": {
+        "body": "Mars",
+        "time": 2458449.323557284,
+        "position": [
+          -2417.67513,
+          2365.792786,
+          266.4204253
+        ],
+        "latitude": 4.5034061,
+        "longitude": 135.62142
+      },
+      "file": "data/missions/insight.json"
+    },
+    {
+      "name": "Phoenix",
+      "spkid": -84,
+      "type": "lander",
+      "icon": "lander",
+      "status": "ended",
+      "fate": "Landed near Mars's north pole, 25 May 2008",
+      "start": 2454316.95,
+      "end": null,
+      "finalParent": "Mars",
+      "landing": {
+        "body": "Mars",
+        "time": 2454832.498611111,
+        "position": [
+          -713.6168364,
+          -1010.007745,
+          3135.29804
+        ],
+        "latitude": 68.473932,
+        "longitude": -125.24296
+      },
+      "file": "data/missions/phoenix.json"
+    },
+    {
+      "name": "Spirit",
+      "spkid": -254,
+      "type": "lander",
+      "icon": "lander",
+      "status": "ended",
+      "fate": "Landed on Mars, 4 Jan 2004; last contact 2010",
+      "start": 2452801.2722222223,
+      "end": null,
+      "finalParent": "Mars",
+      "landing": {
+        "body": "Mars",
+        "time": 2453008.685163796,
+        "position": [
+          -3272.960836,
+          258.8247809,
+          -853.4836583
+        ],
+        "latitude": -14.571882,
+        "longitude": 175.47848
+      },
+      "file": "data/missions/spirit.json"
+    },
+    {
+      "name": "Opportunity",
+      "spkid": -253,
+      "type": "lander",
+      "icon": "lander",
+      "status": "ended",
+      "fate": "Landed on Mars, 25 Jan 2004; last contact 2018",
+      "start": 2452828.6930555557,
+      "end": null,
+      "finalParent": "Mars",
+      "landing": {
+        "body": "Mars",
+        "time": 2453029.7053572573,
+        "position": [
+          3376.422246,
+          -326.6490594,
+          -115.3915387
+        ],
+        "latitude": -1.9482716,
+        "longitude": -5.5258341
+      },
+      "file": "data/missions/opportunity.json"
+    },
+    {
+      "name": "Lunar Reconnaissance Orbiter",
+      "spkid": -85,
+      "type": "planetary_orbiter",
+      "icon": "orbiter",
+      "status": "active",
+      "start": 2455001.4291666667,
+      "end": 2461815.5,
+      "finalParent": "Moon",
+      "landing": null,
+      "file": "data/missions/lunar-reconnaissance-orbiter.json"
+    },
+    {
+      "name": "JWST",
+      "spkid": -170,
+      "type": "deep_space",
+      "icon": "telescope",
+      "status": "active",
+      "start": 2459574.0430555553,
+      "end": 2463130.5,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/jwst.json"
+    },
+    {
+      "name": "DSCOVR",
+      "spkid": -78,
+      "type": "deep_space",
+      "icon": "probe",
+      "status": "active",
+      "start": 2457065.490277778,
+      "end": 2461325.5,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/dscovr.json"
+    },
+    {
+      "name": "Kepler",
+      "spkid": -227,
+      "type": "deep_space",
+      "icon": "telescope",
+      "status": "ended",
+      "fate": "Retired 2018; trailing Earth around the Sun",
+      "start": 2454897.70625,
+      "end": null,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/kepler.json"
+    },
+    {
+      "name": "Spitzer",
+      "spkid": -79,
+      "type": "deep_space",
+      "icon": "telescope",
+      "status": "ended",
+      "fate": "Retired 2020; trailing Earth around the Sun",
+      "start": 2452876.76875,
+      "end": null,
+      "finalParent": "Sun",
+      "landing": null,
+      "file": "data/missions/spitzer.json"
+    }
+  ]
+}

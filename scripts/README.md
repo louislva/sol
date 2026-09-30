@@ -1,95 +1,95 @@
-# Data Fetch Scripts
+# Data scripts
 
-Scripts for downloading and processing orbital data for the solar system visualization.
+Every data file the app uses is generated here from an authoritative source.
+Nothing is synthesized: if a value has not been published (for example the
+radius of many small irregular moons), it is left out and the app shows it as
+unknown.
 
-## Prerequisites
-
-```bash
-npm install
-```
-
-## Scripts
-
-### fetch-asteroids.ts
-
-Downloads asteroid orbital elements from NASA JPL / Minor Planet Center.
+Scripts run directly with Node ≥ 22.18 (native TypeScript type stripping), no
+build step:
 
 ```bash
-npx ts-node scripts/fetch-asteroids.ts [count]
+npm run data:all          # everything, in dependency order
+npm run data:moons        # or any single dataset
 ```
 
-- **Default count**: 10,000 asteroids
-- **Output**: `src/data/asteroids.json`
-- **Data source**: MPCORB database (https://www.minorplanetcenter.net/iau/MPCORB/)
+| Script | Output | Source |
+| --- | --- | --- |
+| `fetch-orientation.ts` | `src/data/orientation.json` | NAIF `pck00011.tpc` (IAU 2015 poles, rotation, radii) and `gm_de440.tpc` (GM) |
+| `fetch-planets.ts` | `src/data/planets.json` | JPL *Approximate Positions of the Planets*, Tables 1 and 2; JPL planetary physical parameters |
+| `fetch-moons.ts` | `src/data/moons.json` | JPL satellite list and reference planes (`sats/elem`), physical parameters (`sats/phys_par`), Horizons state vectors |
+| `fetch-small-bodies.ts` | `src/data/smallBodies.json` | JPL SBDB (identity, size, discovery) and Horizons osculating elements, 1900–2100 |
+| `fetch-asteroids.ts` | `public/data/asteroids.json` | JPL SBDB Query API: the 25,000 brightest asteroids by H |
+| `fetch-spacecraft.ts` | `src/data/spacecraft.json` | Horizons osculating elements for each mission (a quick stand-in until full trajectories load) |
+| `fetch-missions.ts` | `src/data/missions.json`, `public/data/missions/*.json` | Full Horizons trajectories, split by the body each spacecraft is near, and landing sites |
+| `fetch-ephemerides.ts` | `public/data/ephemerides.json`, `public/data/moon.json` | Horizons osculating elements: planets every 30 days and named small bodies yearly (1900–2100), the Moon every 2 days (1957–2100) |
+| `fetch-satellites.ts` | `public/data/satellites.json` | CelesTrak GP (OMM) elements, active satellites and constellation groups |
+| `fetch-stars.ts` | `public/data/stars.json` | SIMBAD (CDS) TAP: stars within 20 pc, naked-eye stars (V < 6.5) and IAU-named stars; names from the IAU Catalog of Star Names (WGSN) |
+| `fetch-galaxy.ts` | `src/data/galaxy.json` | Reid et al. 2019 (ApJ 885, 131), from the arXiv source: spiral-arm fits (Table 2), R0, Θ0 and the solar motion (fit A5); disc and bar from Bland-Hawthorn & Gerhard 2016, bulge from Wegg & Gerhard 2013, Sgr A*'s mass from GRAVITY 2022 |
 
-Note: The full MPCORB.DAT file is ~300MB. The script generates sample data by default.
-For real data, download MPCORB.DAT manually and modify the script to parse it.
+`fetch-orientation.ts` must run before `fetch-moons.ts` and
+`fetch-small-bodies.ts`, which read planet poles, GMs and radii from it.
 
-### fetch-satellites.ts
+## How each dataset is modeled
 
-Downloads satellite TLE data from CelesTrak.
+- **Planets** — at runtime, Horizons osculating elements every 30 days for
+  1900–2100 (`fetch-ephemerides.ts`), blended between samples: tens to
+  hundreds of km from DE440. Bundled fallback and outside that span:
+  Standish's mean elements, Table 1 where valid (1800–2050), Table 2
+  (3000 BC – 3000 AD, with the extra outer-planet terms) beyond.
+- **The Moon** — at runtime, geocentric osculating elements every 2 days for
+  1957–2100 (≲ 120 km); the fitted mean orbit below is the fallback. Earth
+  moves about the Earth–Moon barycenter opposite the Moon.
+- **Moons** — for each satellite, a precessing Keplerian orbit (constant
+  a, e, i; linearly advancing mean longitude, periapsis and node) is
+  least-squares fitted to Horizons positions in the satellite's reference
+  plane (Laplace plane, planet equator, or ecliptic, as JPL defines it), over
+  ±25 years about 2025 — or ±8 / ±3 years for strongly perturbed irregular
+  moons, keeping them accurate near the present. The fit error is stored with
+  each moon.
+- **Small bodies** — osculating elements every 10 years from Horizons'
+  numerical integration. The app blends the two conics bracketing a date:
+  exact at every sample, continuous between them.
+- **Asteroid cloud** — osculating elements at the SBDB epoch (two-body).
+  Sorted by absolute magnitude so the app can draw the largest N as a level
+  of detail.
+- **Spacecraft** — full trajectories (`fetch-missions.ts`). The mission is
+  split into segments by the body the spacecraft is near: the deepest body
+  whose region (Laplace sphere of influence, at least 20 radii — 100 for small
+  bodies) contains it, with encounters shorter than the daily sampling found
+  by refining any interval the spacecraft could have crossed a region in.
+  Each segment is sampled adaptively relative to its body: osculating
+  elements where that body's gravity dominates (interpolated in element
+  space), Hermite states near small bodies. Landers end in a surface segment:
+  touchdown is the moment after which the body-fixed position (IAU rotation)
+  stops changing, and the site is read from the ephemeris. The index ships
+  with the app; trajectories load at runtime. Horizons responses are cached
+  in `scripts/.cache/` (gitignored), so reruns are quick.
+- **Earth satellites** — CelesTrak elements propagated with Keplerian motion
+  plus J2 secular drift of the node and perigee, shown within a year of
+  their element epochs.
+- **Spacecraft leaving the solar system** (Voyagers, Pioneers, New Horizons)
+  — after their Horizons data ends, they coast on the final osculating
+  hyperbola about the Sun.
+- **Stars** — straight-line motion at each star's measured space velocity
+  (parallax, proper motion, radial velocity) relative to the Sun, from its
+  J2000 position. Stars with parallax errors over 20% are left out; radial
+  velocities faster than the Galaxy's escape speed are errors and are
+  treated as unknown (zero). Voyager 2 passes Ross 248 at 1.7 light-years in
+  44,000 AD, as NASA describes.
+- **The Galaxy** — the one synthetic layer in the app, for show: a few
+  hundred thousand dots (not stars) scattered with a fixed seed according to
+  the structure above — exponential disc, bulge, long bar, and young stars
+  along the arms. Reid et al. conclude the Galaxy has four major arms with an
+  average pitch of 10°; they are drawn as a symmetric four-arm spiral (the
+  assumption behind the familiar face-on pictures) rotated to fit the measured
+  arm segments, with Scutum–Centaurus and Perseus as the richer major pair
+  (Churchwell et al. 2009), plus the Local arm and the near and far 3-kpc arms. The Sun circles the Galactic center at Θ0 plus its
+  peculiar motion.
 
-```bash
-npx ts-node scripts/fetch-satellites.ts
-```
+## Verifying positions
 
-- **Output**: `src/data/satellites.json`
-- **Data sources**:
-  - Space stations: https://celestrak.org/NORAD/elements/gp.php?GROUP=stations
-  - GPS satellites: https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops
-  - Geostationary: https://celestrak.org/NORAD/elements/gp.php?GROUP=geo
-
-Note: CelesTrak may rate-limit requests. If downloads fail, sample data is generated.
-
-## Data Formats
-
-### Asteroid Data (asteroids.json)
-
-```json
-{
-  "name": "Vesta",      // Optional, only for named asteroids
-  "a": 2.362,           // Semi-major axis (AU)
-  "e": 0.089,           // Eccentricity
-  "i": 7.14,            // Inclination (degrees)
-  "Omega": 103.8,       // Longitude of ascending node (degrees)
-  "omega": 149.8,       // Argument of perihelion (degrees)
-  "M0": 20,             // Mean anomaly at epoch (degrees)
-  "n": 0.272            // Mean motion (degrees/day)
-}
-```
-
-### Satellite Data (satellites.json)
-
-```json
-{
-  "name": "ISS (ZARYA)",
-  "a": 6797.0,          // Semi-major axis (km)
-  "e": 0.0001,          // Eccentricity
-  "i": 51.6,            // Inclination (degrees)
-  "Omega": 120.0,       // RAAN (degrees)
-  "omega": 0.0,         // Argument of perigee (degrees)
-  "M0": 0.0,            // Mean anomaly at epoch (degrees)
-  "n": 5693.0,          // Mean motion (degrees/day)
-  "epoch": 2460000,     // Julian date of epoch
-  "category": "LEO"     // LEO, MEO, GEO, or OTHER
-}
-```
-
-## Regenerating Data
-
-To update the data files with fresh orbital elements:
-
-```bash
-# Update asteroid data
-npx ts-node scripts/fetch-asteroids.ts 10000
-
-# Update satellite data
-npx ts-node scripts/fetch-satellites.ts
-```
-
-## External Data Sources
-
-- **Minor Planet Center**: https://www.minorplanetcenter.net/
-- **NASA JPL Horizons**: https://ssd.jpl.nasa.gov/horizons/
-- **CelesTrak**: https://celestrak.org/
-- **Space-Track**: https://www.space-track.org/ (requires registration)
+Positions can be spot-checked against Horizons vectors: in the browser
+console, `sol.pause(); sol.setDate("2026-01-01"); sol.getBody("Titan")`
+gives heliocentric J2000-ecliptic km to compare with a Horizons `VECTORS`
+query (`CENTER='500@10'`, `REF_PLANE=ECLIPTIC`).

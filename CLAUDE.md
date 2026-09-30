@@ -13,6 +13,7 @@ Top-down solar system visualization. Clean, elegant, geometric like Mini Metro. 
 - NASA JPL Horizons / Small-Body Database
 - Minor Planet Center
 - IAU official sources
+- For stars and the Galaxy: SIMBAD (CDS), the IAU WGSN, and peer-reviewed papers
 
 If data is not available, either:
 1. Write a fetch script to get real data
@@ -20,112 +21,155 @@ If data is not available, either:
 
 Random/procedural generation of orbital parameters is NOT acceptable.
 
+**One exception: the synthetic Milky Way** (`src/view/galaxy/`). Nobody has
+seen the Galaxy from outside, so its face-on picture is drawn as a clearly
+separate, for-show layer of dots scattered by a fixed seed according to
+published structure (disc, bar, bulge, spiral arms; see `galaxy.json`).
+Those dots are not stars: they are never pickable, named or searchable, and
+real stars are always a separate layer on top. Don't extend synthetic data
+to anything that stands for a real, individual object.
+
 ## Development
 ```bash
-npm run dev      # Start dev server
-npm run build    # Build for production
-npx tsc --noEmit # Type check
+npm run dev        # Start dev server
+npm run build      # Type check + production build
+npm run typecheck  # Type check app and data scripts
+npm run verify     # Compare computed positions with JPL Horizons
+npm run data:all   # Regenerate every data file (see scripts/README.md)
+npm run data:missions -- "Voyager 2"   # Regenerate one mission's trajectory
 ```
+
+Always push after committing (Vercel deploys each pushed branch). Before
+pushing, make sure the committed tree builds, not just the working copy.
 
 ## Visual Design
 - Background: `#000000` (black)
 - Orbits: Body color with low opacity
 - Sun: `#ffff00` (yellow)
-- Planets: Distinct colors per planet
-- Probes: White icon (cylinder + solar panels)
+- Planets: Distinct colors per planet (`src/data/palette.ts`)
+- Spacecraft: Flat icons (probe, orbiter, telescope)
 
 ## Architecture
 ```
 src/
-├── main.ts                 # Entry point, combines all bodies
-├── style.css               # Dark theme
-├── core/
-│   ├── camera.ts           # Zoom/pan, coordinate transforms
-│   ├── renderer.ts         # Canvas drawing, LOD asteroid rendering
-│   └── time.ts             # Time simulation, speed controls
-├── astronomy/
-│   ├── kepler.ts           # Orbital mechanics (heliocentric + parent-centric)
-│   ├── bodies.ts           # CelestialBody interface, planets, dwarf planets
-│   ├── constants.ts        # AU, colors, min display sizes
-│   ├── asteroidBelt.ts     # LOD system for 10,000+ asteroids
-│   └── tle.ts              # TLE parsing for satellites
-├── data/
-│   ├── moons.json          # Moon orbital data from JPL (66 moons)
-│   ├── moons.ts            # Moon data loader and filtering
-│   ├── probes.ts           # Space probes with segmented orbits (legacy)
-│   ├── spacecraft.json     # Spacecraft data from JPL Horizons (29+ missions)
-│   ├── spacecraft.ts       # Spacecraft loader with timeline filtering
-│   ├── satellites.json     # Earth satellite TLE data from CelesTrak (64 satellites)
-│   ├── satellites.ts       # Satellite data loader and filtering
-│   └── comets.ts           # Comet orbital data
-scripts/
-├── fetch-moons.ts          # Download moon data from JPL Horizons
-├── fetch-spacecraft.ts     # Download spacecraft data from JPL Horizons
-├── fetch-asteroids.ts      # Download MPCORB asteroid data
-├── fetch-satellites.ts     # Download TLE satellite data
-└── README.md               # Data regeneration docs
+├── main.ts                   # Entry point
+├── app.ts                    # Frame loop, reference frame, selection/follow, commands
+├── astro/                    # Pure math, no app state
+│   ├── constants.ts          # Units, epochs, time scales (UTC ↔ TDB)
+│   ├── rotation.ts           # Frame rotations (ICRF, ecliptic, pole frames)
+│   ├── galactic.ts           # Galactic frame, the display twist, star states, spiral arms
+│   └── kepler.ts             # KeplerOrbit: 3D conics with secular drift, path sampling
+├── model/                    # What exists and where it is
+│   ├── body.ts               # Body, Motion, MotionSegment (the time-segmented model)
+│   ├── catalog.ts            # Builds all bodies from src/data/*.json
+│   ├── ephemeris.ts          # Hierarchical position resolution, per-frame cache
+│   ├── world.ts              # Catalog + ephemeris + populations; Target type
+│   ├── clock.ts              # Simulation time and speed modes
+│   ├── asteroidPopulation.ts # 25k asteroids, structure-of-arrays
+│   ├── satellitePopulation.ts# All active Earth satellites, J2 drift
+│   └── starPopulation.ts     # ~11k stars moving at their measured space velocities
+├── view/
+│   ├── camera.ts             # Camera in a moving reference frame
+│   ├── referenceFrame.ts     # Automatic reference-frame choice
+│   ├── input.ts              # Pointer/wheel/touch/gesture → intents
+│   ├── renderer.ts           # Frame composition, projection, occlusion
+│   ├── picking.ts            # Hit testing against what was drawn
+│   ├── galaxy/               # Synthetic Milky Way (for show) and its WebGL renderer
+│   └── layers/               # stars, galactic center, orbits, rings, labels, icons, populations, scale bar
+├── ui/                       # Controls, info sidebar, console API, Wikipedia
+└── data/                     # Generated JSON (+ palette.ts); see scripts/README.md
+scripts/                      # Data fetchers (Node ≥ 22.18 runs .ts directly)
+public/data/                  # Large datasets loaded at runtime (asteroids, satellites, stars, missions)
 ```
 
 ## Key Design Decisions
 
-### True Scale with Minimum Size
-All objects at real size (km), clamped to minimum pixel sizes when zoomed out:
-- Sun: 20px min
-- Planets: 4px min
-- Dwarf planets/moons: 3px min
-- Asteroids/comets: 2px min
-- Probes: 8px min (custom icon)
+### Coordinates and time
+Everything is heliocentric J2000 ecliptic, in km, 3D. The view is top-down,
+so screen x/y are world x/y: inclined orbits appear as the ellipses you
+would see from above (Uranus's moons, Saturn's rings). Simulation time is a
+Julian date in TDB; UTC sources (TLEs, the wall clock) are converted.
 
-### Hierarchical Positioning
-- `OrbitalElements` - heliocentric orbits (AU-based, planets/comets/asteroids)
-- `ParentCentricElements` - parent-relative orbits (km-based, moons/satellites)
-- `parentName` field links child to parent body
-- Recursive position resolution in `getBodyPosition()`
+### Motion timelines
+A `Body` has `segments`: each covers a time span, names the parent the
+motion is relative to, and a `Motion`: `fixed`, `kepler` (a `KeplerOrbit`,
+optionally with secular drift), `keplerSeries` (osculating conics sampled
+over time and blended), or `barycentric` (Earth's reflex motion about the
+Earth–Moon barycenter). Planets switch JPL element tables at 1800/2050 this
+way. A spacecraft can be modeled as launch → cruise → orbit/landing segments
+with different parents. `existsFrom`/`existsUntil` bound when a body is in
+the scene.
 
-### Segmented Orbits
-For objects with trajectory changes (gravity assists):
-```typescript
-segments: [
-  { startJD, endJD, elements: OrbitalElements },
-  // ... more segments
-]
-```
+### Beyond the solar system
+Zooming out continues past the planets to the stars and the whole Milky Way.
+The ecliptic and the Galactic plane are 60° apart, and both are drawn
+top-down: positions about the Sun beyond 1,000 AU turn smoothly (by distance)
+into the Galactic plane, fully so beyond 60,000 AU (`astro/galactic.ts`
+`twist`). Distances from the Sun are kept, and stars and far-out spacecraft
+share one frame, so Voyager meets its stars where the map shows them. Stars
+are drawn within a slab around the height of whatever is framed. At galactic
+scale a synthetic Milky Way (WebGL, behind the main canvas) fills in the face-on
+picture, thinning out near the Sun where the real stars are, its bar and arms
+turning at their measured pattern speeds. Sagittarius A* is a catalog body
+(kind `blackHole`, motion `galacticCenter`) drawn at its event horizon's size,
+never smaller than a few pixels. The clock spans ±10 million years; beyond the
+calendar's reach (±200,000 years) dates are shown as years. The clock
+spans ±10 million years; outside 3000 BC – 3000 AD the planets' positions are
+extrapolations (the status line says so; their orbit shapes hold at the model's
+boundary values), and Earth satellites show only near their element epochs.
 
-### Asteroid Belt LOD
-- **Zoomed out (>20 AU)**: Statistical ring overlay
-- **Medium zoom**: ~500 sampled asteroids
-- **Zoomed in**: Up to 2000 asteroids in viewport
+### Other star systems (extending)
+Stars are a population (SoA, `model/starPopulation.ts`), not bodies, so 11k+
+of them cost little. A star is still a full `Target`: hover, select, follow,
+search, and it becomes the automatic reference frame when the view is within
+half a light-year of it (`view/referenceFrame.ts`). To give a star planets,
+make that star a `Body` (parent: Sun; motion in the display frame like
+`galacticCenter`, i.e. not twisted), leave it out of the population, and add
+its planets as bodies with `kepler` motion about it. The hierarchy then handles
+positions, orbits, level of detail and framing as it does for the Sun.
 
-### Satellite LOD
-- **Zoomed out**: Satellites hidden for performance
-- **Zoomed to Earth (>30px Earth radius)**: 64 satellites visible (LEO, MEO, GEO)
-- Satellites use TLE (Two-Line Element) orbital data from CelesTrak
-- Categories: LEO (red), MEO (blue), GEO (green)
+### Reference frames
+The camera stores its center as an offset from a frame body that moves with
+it. Automatically, the frame is the deepest body whose region (Hill sphere,
+widened to cover its moons) contains the view center while the view is not
+much larger than that region — Earth when looking at satellites, Jupiter for
+the Galilean moons, the Sun for the planets, a star or Sagittarius A* when
+zoomed in on one out among the stars. Zooming in over an object keeps the zoom
+anchored on it as it moves. `Follow` (sidebar button,
+double-click, or `sol.follow`) locks the frame to any object; Esc releases.
 
-### Parent Occlusion
-Bodies fade out when visually inside their parent's minimum display size.
-Labels fade earlier (32-64px from parent edge).
+### Spacecraft missions
+Each spacecraft's full Horizons trajectory (`scripts/fetch-missions.ts`,
+loaded at runtime from `public/data/missions/`) is a timeline of segments
+relative to the body it is near: Earth at launch, the Sun in cruise, a planet
+or moon during a flyby, an asteroid in proximity operations. Segments use
+`keplerSeries` (element-space interpolation) where gravity dominates, `hermite`
+states near small bodies, and `surface` once landed (site from the ephemeris,
+rotating with the IAU model; a small figure stands beside the lander).
+Focused spacecraft draw their flown path in the frame of the body they are
+near — Voyager's hyperbola around Jupiter, not a heliocentric smear. "Watch
+from launch" (sidebar, Missions menu, `sol.watch`) rewinds and follows, with
+auto speed pacing the spacecraft's motion (slow motion at flybys).
 
-## Current Status (Phase 3 In Progress)
-- [x] Canvas with zoom/pan
-- [x] 8 planets with real orbital data
-- [x] Time simulation with speed controls
-- [x] Dwarf planets (Pluto, Ceres, Eris, Makemake, Haumea)
-- [x] Major moons (66 moons from JPL Horizons)
-- [x] Asteroid belt with LOD (10,000 asteroids)
-- [x] Notable comets (Halley, Hale-Bopp, NEOWISE, etc.)
-- [x] Space probes from JPL Horizons (29+ missions with real ephemerides)
-- [x] Custom spacecraft icons (probe, telescope, orbiter, rover)
-- [x] Timeline filtering (spacecraft appear/disappear based on mission dates)
-- [x] Data fetch scripts for asteroids, satellites, and spacecraft
-- [x] Earth satellites (64 satellites: LEO, MEO, GEO) with LOD visibility
+### True scale with minimum size
+Bodies are drawn at true size, clamped to a minimum on-screen radius per kind
+(Sun 20px, planets 4px, dwarfs/moons 3px, asteroids/comets 2px, spacecraft
+8px icons). Bodies with no published radius are drawn at the minimum.
 
-## Future Features
-- [ ] Click for object info popups
-- [ ] Search & highlight
-- [ ] Reverse time
-- [ ] Jump to specific date
-- [ ] Scale reference overlay
+### Occlusion
+When a parent's disc is resolved, a moon or satellite is hidden only while it
+is behind the parent. When the parent is drawn at its minimum size, children
+fade out as they merge into it; labels fade earlier. Satellite systems whose
+whole orbit is inside the parent's disc are not even propagated.
+
+### Level of detail
+- Orbit paths: point count from on-screen size (sub-pixel chord error),
+  sampled in eccentric anomaly; huge orbits sample only the arc near the view.
+- Asteroid cloud: sorted by size (H), draws the largest N for the current
+  scale; positions refreshed only when they could have moved ¼ px.
+- Satellites appear once Earth's satellite system spans a few pixels.
+- Moons: all are drawn; only major and medium moons (radius > 10 km) always draw their orbits, the rest only when hovered or selected.
+- Labels: placed by priority, never overlapping.
 
 ## Browser Debugging
 
@@ -137,7 +181,10 @@ The app exposes a `window.sol` object for programmatic control via the browser c
 
 ### Navigation
 ```js
-sol.goto("Earth")          // Center camera on a body (auto-zooms by type)
+sol.goto("Earth")          // Center camera on a body or star (auto-zooms by type)
+sol.follow("ISS (ZARYA)")  // Lock the camera frame to an object
+sol.unfollow()             // Back to the automatic reference frame
+sol.watch("Voyager 2")     // Rewind to a mission's launch and follow it
 sol.pan(1, 0)              // Pan by offset in AU
 sol.panToAU(1, 0)          // Pan to absolute position in AU
 sol.panTo(x, y)            // Pan to absolute position in km
@@ -150,9 +197,11 @@ sol.zoomOut(3)             // Zoom out by factor (default 3x)
 ```js
 sol.setDate("2024-07-04")  // Jump to a specific date (ISO format)
 sol.setSpeed("year")       // Set speed mode: auto|realtime|day|month|year
-sol.setTimeScale(86400)    // Set exact time scale (simulated sec per real sec)
-sol.pause()                // Pause time (sets scale to 0)
-sol.resume()               // Resume with auto speed
+sol.setTimeScale(86400)    // Set exact time scale (simulated sec per real sec; negative runs backward)
+sol.pause()                // Pause time
+sol.resume()               // Resume forward with auto speed
+sol.reverse()              // Flip the direction of time
+sol.setDate("40000-01-01") // Deep time works too (±250,000 years)
 sol.getDate()              // Get current simulation date string
 ```
 
@@ -161,7 +210,8 @@ sol.getDate()              // Get current simulation date string
 sol.listBodies()           // List all body names (string[])
 sol.findBody("mars")       // Search bodies by name substring
 sol.getBody("Earth")       // Get body name, type, position (km and AU)
-sol.status()               // Get camera center, zoom, date, speed info
+sol.perf()                 // Mean ms per frame for each rendering phase
+sol.status()               // Camera center, zoom, date, speed, reference frame
 ```
 
 ### Selection
@@ -171,17 +221,7 @@ sol.deselect()             // Clear selection
 ```
 
 ## Data Sources
-- **Planets**: NASA JPL Horizons (https://ssd.jpl.nasa.gov/planets/approx_pos.html)
-- **Moons**: NASA JPL Horizons API (https://ssd.jpl.nasa.gov/api/horizons.api)
-- **Spacecraft**: NASA JPL Horizons API (orbital elements for 29+ missions)
-- **Asteroids**: Minor Planet Center MPCORB (https://www.minorplanetcenter.net/)
-- **Satellites**: CelesTrak TLE (https://celestrak.org/)
-- **Comets**: NASA JPL Small-Body Database
-
-## Regenerating Data
-```bash
-npx tsx scripts/fetch-moons.ts        # Fetch moon data from JPL Horizons
-npx tsx scripts/fetch-spacecraft.ts   # Fetch spacecraft data from JPL Horizons
-npx ts-node scripts/fetch-asteroids.ts 10000
-npx ts-node scripts/fetch-satellites.ts
-```
+See `scripts/README.md`. In short: NAIF PCK/GM kernels, JPL approximate
+planet elements, JPL Horizons (moons, small bodies, spacecraft), JPL SBDB
+(asteroids), CelesTrak (Earth satellites), SIMBAD and the IAU WGSN (stars),
+Reid et al. 2019 (the Galaxy's spiral arms and the Sun's motion).

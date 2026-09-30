@@ -24,22 +24,35 @@
       <div id="sidebar-content"></div>
     </div>
     <div id="ui">
-      <div id="date-display"></div>
-      <div id="speed-selector">
-        <button class="speed-option active" data-speed="auto">Auto</button>
-        <button class="speed-option" data-speed="realtime">Realtime</button>
-        <button class="speed-option" data-speed="day">1 day / s</button>
-        <button class="speed-option" data-speed="month">1 month / s</button>
-        <button class="speed-option" data-speed="year">1 year / s</button>
+      <div id="date-row">
+        <button id="date-display" title="Set the date (click to type)"></button>
+        <input id="date-input" class="hidden" type="text" spellcheck="false" autocomplete="off"
+               aria-label="Date, e.g. 1977-08-20 or 1969-07-20 20:17 (UTC)" placeholder="YYYY-MM-DD hh:mm">
       </div>
-      <div id="moon-selector">
-        <span>Moons:</span>
-        <button class="moon-option" data-moons="major">Major</button>
-        <button class="moon-option active" data-moons="medium">Medium+</button>
-        <button class="moon-option" data-moons="named">Named</button>
-        <button class="moon-option" data-moons="minor">All</button>
+      <div id="transport">
+        <button id="rewind" class="transport-button" title="Rewind (←); again for faster" aria-label="Rewind">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9L1.5 8zM14.5 3.5v9L8 8z"/></svg>
+        </button>
+        <button id="play-pause" class="transport-button" title="Play / pause (Space)" aria-label="Pause">
+          <svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
+          <svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5v11L13 8z"/></svg>
+        </button>
+        <button id="fast-forward" class="transport-button" title="Fast forward (→); again for faster" aria-label="Fast forward">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9L14.5 8zM1.5 3.5v9L8 8z"/></svg>
+        </button>
+        <input id="speed-slider" type="range" min="0" max="1000" step="1" aria-label="Speed">
+        <span id="speed-readout"></span>
+        <button id="auto-speed" class="transport-toggle" title="Pick speed automatically from the view">Auto</button>
+        <button id="now-button" class="transport-toggle" title="Jump to the present">Now</button>
       </div>
-      <div id="speed-indicator"><span id="current-speed"></span> · <span id="zoom-level"></span> · <span id="orbit-resolution"></span></div>
+      <div id="missions-panel" class="hidden" role="dialog" aria-label="Missions">
+        <div class="missions-title">Watch a mission from launch</div>
+        <div id="missions-list"></div>
+      </div>
+      <div id="toolbar">
+        <button id="missions-button" class="toolbar-button" aria-expanded="false">Missions</button>
+      </div>
+      <div id="status-line"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

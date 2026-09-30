@@ -1,321 +1,382 @@
 /**
- * Moon Data Fetch Script
+ * Planetary satellites: mean orbits fitted to the JPL ephemerides.
  *
- * Downloads moon orbital elements from NASA JPL's Horizons API
- * and converts to our format.
+ * Sources:
+ *   https://ssd.jpl.nasa.gov/sats/elem/
+ *     The list of satellites with JPL ephemerides, each one's reference
+ *     plane (Laplace plane, planet equator, or ecliptic), and period.
+ *   https://ssd.jpl.nasa.gov/api/horizons.api
+ *     Planet-centered state vectors sampled over 2000–2050, and each
+ *     satellite's physical data header (radius).
+ *   https://ssd.jpl.nasa.gov/sats/phys_par/
+ *     Mean radius and GM for well-characterized satellites.
+ *   src/data/orientation.json (NAIF PCK, run fetch-orientation.ts first)
+ *     Planet GM and pole orientation, triaxial radii.
  *
- * Usage:
- *   npx ts-node scripts/fetch-moons.ts
+ * For every satellite, a precessing Keplerian orbit (constant a, e, i;
+ * linearly advancing mean longitude, periapsis, and node) is least-squares
+ * fitted to the Horizons positions in the satellite's reference plane. This
+ * is the model the app evaluates, so the fit is the best such orbit for the
+ * whole span — rather than an osculating snapshot that drifts, or published
+ * mean elements whose conventions vary between ephemeris solutions.
  *
- * Output:
- *   src/data/moons.json
+ * Satellites without a published radius keep radius = null; the app draws
+ * them as points.
  *
- * Data source:
- *   NASA JPL Horizons API: https://ssd.jpl.nasa.gov/api/horizons.api
- *   JPL Satellite Elements: https://ssd.jpl.nasa.gov/sats/elem/
+ * Output: src/data/moons.json
+ * Run:    node scripts/fetch-moons.ts
  */
 
-import fs from 'node:fs';
-import https from 'node:https';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import {
+  ROOT,
+  fetchText,
+  isoToJulian,
+  leadingNumber,
+  parseHtmlTables,
+  horizonsCoverageLimit,
+  sig,
+  sleep,
+  writeJson,
+} from "./lib/common.ts";
+import { type FitSample, fitMeanElements, stateToParams } from "./lib/orbitFit.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const ELEMENTS_URL = "https://ssd.jpl.nasa.gov/sats/elem/";
+const PHYSICAL_URL = "https://ssd.jpl.nasa.gov/sats/phys_par/";
+const HORIZONS_URL = "https://ssd.jpl.nasa.gov/api/horizons.api";
 
-interface MoonData {
+const PLANET_NAIF_IDS: Record<string, number> = {
+  Earth: 399, Mars: 499, Jupiter: 599, Saturn: 699, Uranus: 799, Neptune: 899, Pluto: 999,
+};
+
+/** Default fit epoch: 2025-01-01 TDB. */
+const EPOCH = 2460676.5;
+const DEG = Math.PI / 180;
+/** The J2000 ecliptic as a pole (RA, Dec in ICRF): its node on the equator is the equinox. */
+const ECLIPTIC_POLE: [number, number] = [270, 90 - 84381.406 / 3600];
+
+interface MoonRecord {
   name: string;
-  parentName: string;
-  radius: number;        // km
-  a: number;             // Semi-major axis (km)
-  e: number;             // Eccentricity
-  i: number;             // Inclination (degrees)
-  Omega: number;         // Longitude of ascending node (degrees)
-  omega: number;         // Argument of perihelion (degrees)
-  M0: number;            // Mean anomaly at epoch (degrees)
-  period: number;        // Orbital period (days)
-  category: 'major' | 'medium' | 'named' | 'minor';
+  naifId: number;
+  parent: string;
+  /** Reference plane pole (RA, Dec, deg, ICRF). Retrograde orbits use the flipped pole. */
+  referencePole: [number, number];
+  epoch: number;         // JD (TDB)
+  a: number;             // km
+  e: number;
+  i: number;             // deg
+  node: number;          // deg, from the plane's node on the ICRF equator
+  argPeri: number;       // deg
+  meanAnomaly: number;   // deg at epoch
+  meanMotion: number;    // deg/day
+  nodeRate: number;      // deg/day
+  argPeriRate: number;   // deg/day
+  fitRmsKm: number;
+  fitSpanDays: number;
+  radius: number | null; // km
+  gm: number | null;     // km^3/s^2
+  radiusSource: string | null;
 }
 
-// JPL body IDs for moons
-// Format: planet_number * 100 + moon_number
-const MOON_IDS: { id: number; name: string; parent: string; radius: number }[] = [
-  // Earth
-  { id: 301, name: 'Moon', parent: 'Earth', radius: 1737.4 },
-
-  // Mars
-  { id: 401, name: 'Phobos', parent: 'Mars', radius: 11.267 },
-  { id: 402, name: 'Deimos', parent: 'Mars', radius: 6.2 },
-
-  // Jupiter - Galilean and major
-  { id: 501, name: 'Io', parent: 'Jupiter', radius: 1821.6 },
-  { id: 502, name: 'Europa', parent: 'Jupiter', radius: 1560.8 },
-  { id: 503, name: 'Ganymede', parent: 'Jupiter', radius: 2634.1 },
-  { id: 504, name: 'Callisto', parent: 'Jupiter', radius: 2410.3 },
-  { id: 505, name: 'Amalthea', parent: 'Jupiter', radius: 83.5 },
-  { id: 506, name: 'Himalia', parent: 'Jupiter', radius: 85 },
-  { id: 507, name: 'Elara', parent: 'Jupiter', radius: 43 },
-  { id: 508, name: 'Pasiphae', parent: 'Jupiter', radius: 30 },
-  { id: 509, name: 'Sinope', parent: 'Jupiter', radius: 19 },
-  { id: 510, name: 'Lysithea', parent: 'Jupiter', radius: 18 },
-  { id: 511, name: 'Carme', parent: 'Jupiter', radius: 23 },
-  { id: 512, name: 'Ananke', parent: 'Jupiter', radius: 14 },
-  { id: 513, name: 'Leda', parent: 'Jupiter', radius: 10 },
-  { id: 514, name: 'Thebe', parent: 'Jupiter', radius: 49.3 },
-  { id: 515, name: 'Adrastea', parent: 'Jupiter', radius: 8.2 },
-  { id: 516, name: 'Metis', parent: 'Jupiter', radius: 21.5 },
-
-  // Saturn - Major moons
-  { id: 601, name: 'Mimas', parent: 'Saturn', radius: 198.2 },
-  { id: 602, name: 'Enceladus', parent: 'Saturn', radius: 252.1 },
-  { id: 603, name: 'Tethys', parent: 'Saturn', radius: 531.1 },
-  { id: 604, name: 'Dione', parent: 'Saturn', radius: 561.4 },
-  { id: 605, name: 'Rhea', parent: 'Saturn', radius: 764.3 },
-  { id: 606, name: 'Titan', parent: 'Saturn', radius: 2574.7 },
-  { id: 607, name: 'Hyperion', parent: 'Saturn', radius: 135 },
-  { id: 608, name: 'Iapetus', parent: 'Saturn', radius: 735.6 },
-  { id: 609, name: 'Phoebe', parent: 'Saturn', radius: 106.5 },
-  { id: 610, name: 'Janus', parent: 'Saturn', radius: 89.5 },
-  { id: 611, name: 'Epimetheus', parent: 'Saturn', radius: 58.1 },
-  { id: 612, name: 'Helene', parent: 'Saturn', radius: 17.6 },
-  { id: 613, name: 'Telesto', parent: 'Saturn', radius: 12.4 },
-  { id: 614, name: 'Calypso', parent: 'Saturn', radius: 10.7 },
-  { id: 615, name: 'Atlas', parent: 'Saturn', radius: 15.1 },
-  { id: 616, name: 'Prometheus', parent: 'Saturn', radius: 43.1 },
-  { id: 617, name: 'Pandora', parent: 'Saturn', radius: 40.7 },
-  { id: 618, name: 'Pan', parent: 'Saturn', radius: 14.1 },
-
-  // Uranus - Major moons
-  { id: 701, name: 'Ariel', parent: 'Uranus', radius: 578.9 },
-  { id: 702, name: 'Umbriel', parent: 'Uranus', radius: 584.7 },
-  { id: 703, name: 'Titania', parent: 'Uranus', radius: 788.9 },
-  { id: 704, name: 'Oberon', parent: 'Uranus', radius: 761.4 },
-  { id: 705, name: 'Miranda', parent: 'Uranus', radius: 235.8 },
-  { id: 706, name: 'Cordelia', parent: 'Uranus', radius: 20.1 },
-  { id: 707, name: 'Ophelia', parent: 'Uranus', radius: 21.4 },
-  { id: 708, name: 'Bianca', parent: 'Uranus', radius: 25.7 },
-  { id: 709, name: 'Cressida', parent: 'Uranus', radius: 39.8 },
-  { id: 710, name: 'Desdemona', parent: 'Uranus', radius: 32 },
-  { id: 711, name: 'Juliet', parent: 'Uranus', radius: 46.8 },
-  { id: 712, name: 'Portia', parent: 'Uranus', radius: 67.6 },
-  { id: 713, name: 'Rosalind', parent: 'Uranus', radius: 36 },
-  { id: 715, name: 'Puck', parent: 'Uranus', radius: 81 },
-  { id: 716, name: 'Caliban', parent: 'Uranus', radius: 36 },
-  { id: 717, name: 'Sycorax', parent: 'Uranus', radius: 75 },
-
-  // Neptune
-  { id: 801, name: 'Triton', parent: 'Neptune', radius: 1353.4 },
-  { id: 802, name: 'Nereid', parent: 'Neptune', radius: 170 },
-  { id: 803, name: 'Naiad', parent: 'Neptune', radius: 33 },
-  { id: 804, name: 'Thalassa', parent: 'Neptune', radius: 41 },
-  { id: 805, name: 'Despina', parent: 'Neptune', radius: 75 },
-  { id: 806, name: 'Galatea', parent: 'Neptune', radius: 88 },
-  { id: 807, name: 'Larissa', parent: 'Neptune', radius: 97 },
-  { id: 808, name: 'Proteus', parent: 'Neptune', radius: 210 },
-
-  // Pluto
-  { id: 901, name: 'Charon', parent: 'Pluto', radius: 606 },
-  { id: 902, name: 'Nix', parent: 'Pluto', radius: 23 },
-  { id: 903, name: 'Hydra', parent: 'Pluto', radius: 30.5 },
-  { id: 904, name: 'Kerberos', parent: 'Pluto', radius: 9.5 },
-  { id: 905, name: 'Styx', parent: 'Pluto', radius: 5.5 },
-];
-
-// Determine category based on radius
-function getCategory(radius: number): MoonData['category'] {
-  if (radius > 100) return 'major';
-  if (radius > 10) return 'medium';
-  return 'named';
+interface TableRow {
+  name: string;
+  naifId: number;
+  parent: string;
+  pole: [number, number];
+  period: number;
+  epoch: number;
 }
 
-// Fetch data from JPL Horizons API
-function fetchHorizonsData(bodyId: number, parentId: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // Query for orbital elements relative to parent body
-    const params = new URLSearchParams({
-      format: 'text',
-      COMMAND: `'${bodyId}'`,
-      OBJ_DATA: 'YES',
-      MAKE_EPHEM: 'YES',
-      EPHEM_TYPE: 'ELEMENTS',
-      CENTER: `'500@${parentId}'`,  // Parent body center
-      START_TIME: '2000-01-01',
-      STOP_TIME: '2000-01-02',
-      STEP_SIZE: '1d',
-      REF_PLANE: 'ECLIPTIC',
-      REF_SYSTEM: 'ICRF',
-      OUT_UNITS: 'KM-D',
-    });
+/** "S2003_J_18" → "S/2003 J 18"; IAU names pass through unchanged. */
+function displayName(raw: string): string {
+  const provisional = raw.match(/^S(\d{4})_?([A-Z])_?(\d+)$/);
+  return provisional ? `S/${provisional[1]} ${provisional[2]} ${provisional[3]}` : raw;
+}
 
-    const url = `https://ssd.jpl.nasa.gov/api/horizons.api?${params.toString()}`;
+/** JPL epochs are written "2000-01-01.5" (fractional day). */
+function epochToJulian(text: string): number {
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(\.\d+)?$/);
+  if (!match) throw new Error(`Unrecognized epoch ${text}`);
+  const midnight = isoToJulian(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  return midnight + Number(match[4] ?? 0);
+}
 
-    https.get(url, (response) => {
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
-      response.on('end', () => resolve(data));
-      response.on('error', reject);
-    }).on('error', reject);
+/** Radius from a Horizons object-data header, if one is published. */
+function parseHorizonsRadius(text: string): number | null {
+  const header = text.split("$$SOE")[0];
+  const match = header.match(
+    /(?:Mean radius|Radius|Radii)[^=:\n]*?[=:]\s*~?\s*([\d.]+)(?:\s*[x×]\s*([\d.]+)(?:\s*[x×]\s*([\d.]+))?)?/i
+  );
+  if (!match) return null;
+  const axes = [match[1], match[2], match[3]].filter(Boolean).map(Number);
+  if (!axes.every((value) => Number.isFinite(value) && value > 0)) return null;
+  // Volume-equivalent mean radius. "a x b" is read as a spheroid a × b × b.
+  if (axes.length === 1) return axes[0];
+  const [first, second, third = second] = axes;
+  return Math.cbrt(first * second * third);
+}
+
+/** Rotation taking reference-plane coordinates to ICRF (x toward the plane's node on the equator). */
+function poleFrame([raDeg, decDeg]: [number, number]): number[][] {
+  const ra = raDeg * DEG;
+  const dec = decDeg * DEG;
+  const z = [Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec)];
+  const x = [-Math.sin(ra), Math.cos(ra), 0];
+  const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+  return [x, y, z]; // rows: frame axes expressed in ICRF
+}
+
+function toFrame(frame: number[][], v: number[]): [number, number, number] {
+  return [
+    frame[0][0] * v[0] + frame[0][1] * v[1] + frame[0][2] * v[2],
+    frame[1][0] * v[0] + frame[1][1] * v[1] + frame[1][2] * v[2],
+    frame[2][0] * v[0] + frame[2][1] * v[1] + frame[2][2] * v[2],
+  ];
+}
+
+/**
+ * Sample offsets (days from the epoch): dense over the first few periods,
+ * then geometrically spaced out to the full span in both directions, with
+ * irregular ratios so samples never alias with the orbital period.
+ */
+function sampleOffsets(period: number, halfSpan: number): number[] {
+  const offsets = new Set<number>();
+  if (3 * period >= halfSpan) {
+    for (let k = -30; k <= 30; k++) offsets.add((halfSpan * k) / 30);
+  } else {
+    for (let k = 0; k <= 24; k++) offsets.add((period * k) / 8);
+    for (let reach = 3 * period * 2.2, m = 1; reach < halfSpan; reach *= 2.2, m++) {
+      for (const factor of [1, 1.37]) {
+        const offset = reach * factor * (1 + 0.013 * m);
+        if (offset < halfSpan) {
+          offsets.add(offset);
+          offsets.add(-offset);
+        }
+      }
+    }
+    offsets.add(halfSpan);
+    offsets.add(-halfSpan);
+  }
+  return [...offsets].sort((a, b) => a - b);
+}
+
+class HorizonsError extends Error {
+  readonly text: string;
+  constructor(text: string) {
+    super(text.replace(/\s+/g, " ").slice(0, 240));
+    this.text = text;
+  }
+}
+
+/** Planet-centered ICRF states (km, km/day) at epoch + offsets, and the object-data header. */
+async function fetchStates(naifId: number, planetId: number, epoch: number, offsets: number[]) {
+  const url = new URL(HORIZONS_URL);
+  url.searchParams.set("format", "text");
+  url.searchParams.set("COMMAND", `'${naifId}'`);
+  url.searchParams.set("OBJ_DATA", "YES");
+  url.searchParams.set("MAKE_EPHEM", "YES");
+  url.searchParams.set("EPHEM_TYPE", "VECTORS");
+  url.searchParams.set("CENTER", `'500@${planetId}'`);
+  url.searchParams.set("REF_PLANE", "FRAME");
+  url.searchParams.set("REF_SYSTEM", "ICRF");
+  url.searchParams.set("OUT_UNITS", "KM-D");
+  url.searchParams.set("VEC_TABLE", "2");
+  url.searchParams.set("CSV_FORMAT", "YES");
+  url.searchParams.set("TLIST", offsets.map((offset) => `'${(epoch + offset).toFixed(6)}'`).join(" "));
+  const text = await fetchText(url);
+  const body = text.split("$$SOE")[1]?.split("$$EOE")[0];
+  if (!body) throw new HorizonsError(text);
+  const states = body.trim().split("\n").map((line) => {
+    const fields = line.split(",").map((field) => Number(field.trim()));
+    return { jd: fields[0], position: fields.slice(2, 5), velocity: fields.slice(5, 8) };
   });
+  // Object data precedes the ephemeris header (which describes the *center* body).
+  return { states, header: text.split(/^\s*Ephemeris \/|\$\$SOE/m)[0] };
 }
 
-// Parse Horizons output for orbital elements
-function parseHorizonsElements(text: string): Partial<MoonData> | null {
-  try {
-    const lines = text.split('\n');
+interface MoonFit {
+  elements: ReturnType<typeof fitMeanElements>["elements"];
+  rmsKm: number;
+  pole: [number, number];
+  epoch: number;
+  halfSpan: number;
+  header: string;
+}
 
-    // Find the ephemeris data section (after $$SOE)
-    const soeIndex = lines.findIndex(l => l.includes('$$SOE'));
-    const eoeIndex = lines.findIndex(l => l.includes('$$EOE'));
+/** Fetch samples around `epoch` and fit a precessing orbit in the satellite's reference plane. */
+async function fitMoon(row: TableRow, mu: number, epoch: number, halfSpan: number): Promise<MoonFit> {
+  const planetId = PLANET_NAIF_IDS[row.parent];
+  const fetched = await fetchStates(row.naifId, planetId, epoch, sampleOffsets(row.period, halfSpan));
 
-    if (soeIndex === -1 || eoeIndex === -1) {
-      console.log('Could not find ephemeris data markers');
-      return null;
-    }
-
-    // Parse orbital elements from the data section
-    // Horizons outputs elements in a specific format
-    const dataLines = lines.slice(soeIndex + 1, eoeIndex);
-
-    let a: number | undefined;
-    let e: number | undefined;
-    let i: number | undefined;
-    let Omega: number | undefined;
-    let omega: number | undefined;
-    let M0: number | undefined;
-    let period: number | undefined;
-
-    for (const line of dataLines) {
-      // Parse each element - format varies but typically includes labels
-      if (line.includes(' A =') || line.includes(' A=')) {
-        const match = line.match(/A\s*=\s*([\d.E+-]+)/i);
-        if (match) a = parseFloat(match[1]);
-      }
-      if (line.includes(' EC=') || line.includes(' EC =')) {
-        const match = line.match(/EC\s*=\s*([\d.E+-]+)/i);
-        if (match) e = parseFloat(match[1]);
-      }
-      if (line.includes(' IN=') || line.includes(' IN =')) {
-        const match = line.match(/IN\s*=\s*([\d.E+-]+)/i);
-        if (match) i = parseFloat(match[1]);
-      }
-      if (line.includes(' OM=') || line.includes(' OM =')) {
-        const match = line.match(/OM\s*=\s*([\d.E+-]+)/i);
-        if (match) Omega = parseFloat(match[1]);
-      }
-      if (line.includes(' W =') || line.includes(' W=')) {
-        const match = line.match(/W\s*=\s*([\d.E+-]+)/i);
-        if (match) omega = parseFloat(match[1]);
-      }
-      if (line.includes(' MA=') || line.includes(' MA =')) {
-        const match = line.match(/MA\s*=\s*([\d.E+-]+)/i);
-        if (match) M0 = parseFloat(match[1]);
-      }
-      if (line.includes(' PR=') || line.includes(' PR =')) {
-        const match = line.match(/PR\s*=\s*([\d.E+-]+)/i);
-        if (match) period = parseFloat(match[1]);
-      }
-    }
-
-    if (a !== undefined && e !== undefined && i !== undefined) {
-      return {
-        a,
-        e,
-        i,
-        Omega: Omega || 0,
-        omega: omega || 0,
-        M0: M0 || 0,
-        period: period || 1,
-      };
-    }
-
-    return null;
-  } catch (err) {
-    console.error('Error parsing Horizons data:', err);
-    return null;
+  // Retrograde orbits are fitted in the flipped plane so the (p, q)
+  // inclination parameters stay far from their singularity.
+  const epochState = fetched.states.find((state) => Math.abs(state.jd - epoch) < 1e-6) ?? fetched.states[0];
+  let pole = row.pole;
+  let frame = poleFrame(pole);
+  const r0 = toFrame(frame, epochState.position);
+  const v0 = toFrame(frame, epochState.velocity);
+  if (r0[0] * v0[1] - r0[1] * v0[0] < 0) {
+    pole = [(pole[0] + 180) % 360, -pole[1]];
+    frame = poleFrame(pole);
   }
+  const samples: FitSample[] = fetched.states.map((state) => ({
+    dt: state.jd - epoch,
+    position: toFrame(frame, state.position),
+  }));
+  const initial = stateToParams(toFrame(frame, epochState.position), toFrame(frame, epochState.velocity), mu);
+  initial[1] -= initial[2] * (epochState.jd - epoch);
+  const { elements, rmsKm } = fitMeanElements(initial, samples, row.period);
+  if (![elements.a, elements.e, elements.meanMotion, rmsKm].every(Number.isFinite)) {
+    throw new Error("fit did not converge");
+  }
+  return { elements, rmsKm, pole, epoch, halfSpan, header: fetched.header };
 }
 
-// Get parent body ID from name
-function getParentId(parentName: string): number {
-  const parentIds: Record<string, number> = {
-    'Earth': 399,
-    'Mars': 499,
-    'Jupiter': 599,
-    'Saturn': 699,
-    'Uranus': 799,
-    'Neptune': 899,
-    'Pluto': 999,
-  };
-  return parentIds[parentName] || 10;
-}
+/** Accept a fit whose RMS error is within this fraction of the orbit size. */
+const GOOD_FIT = 0.02;
+const SPAN_YEARS = [25, 8, 3];
 
-// Sleep utility for rate limiting
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+async function main(): Promise<void> {
+  const orientation = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "src/data/orientation.json"), "utf8")
+  ) as { bodies: Record<string, { poleRa?: [number, number]; poleDec?: [number, number]; primeMeridian?: [number, number]; radii?: number[]; gm?: number }> };
 
-// Main function
-async function main() {
-  const outputPath = path.join(__dirname, '../src/data/moons.json');
-  const moons: MoonData[] = [];
-
-  console.log(`Fetching orbital data for ${MOON_IDS.length} moons from JPL Horizons...`);
-  console.log('This may take a few minutes due to API rate limiting.\n');
-
-  for (let idx = 0; idx < MOON_IDS.length; idx++) {
-    const moon = MOON_IDS[idx];
-    const parentId = getParentId(moon.parent);
-
-    process.stdout.write(`[${idx + 1}/${MOON_IDS.length}] Fetching ${moon.name}... `);
-
-    try {
-      const response = await fetchHorizonsData(moon.id, parentId);
-      const elements = parseHorizonsElements(response);
-
-      if (elements && elements.a && elements.e !== undefined) {
-        const moonData: MoonData = {
-          name: moon.name,
-          parentName: moon.parent,
-          radius: moon.radius,
-          a: elements.a,
-          e: elements.e,
-          i: elements.i || 0,
-          Omega: elements.Omega || 0,
-          omega: elements.omega || 0,
-          M0: elements.M0 || 0,
-          period: elements.period || 1,
-          category: getCategory(moon.radius),
-        };
-        moons.push(moonData);
-        console.log('OK');
-      } else {
-        console.log('FAILED (could not parse elements)');
-        // Save response for debugging
-        const debugPath = path.join(__dirname, `../debug_${moon.name}.txt`);
-        fs.writeFileSync(debugPath, response);
-        console.log(`  Debug output saved to ${debugPath}`);
-      }
-    } catch (err) {
-      console.log(`FAILED: ${err}`);
-    }
-
-    // Rate limit: wait 500ms between requests
-    await sleep(500);
+  const [elementsHtml, physicalHtml] = await Promise.all([fetchText(ELEMENTS_URL), fetchText(PHYSICAL_URL)]);
+  const physical = new Map<number, { gm: number | null; radius: number | null }>();
+  for (const row of parseHtmlTables(physicalHtml)[0].slice(2)) {
+    physical.set(Number(row[2]), { gm: leadingNumber(row[3]), radius: leadingNumber(row[4]) });
   }
 
-  // Ensure output directory exists
-  const outputDir = path.dirname(outputPath);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+  // One row per satellite: keep the most recent solution when a satellite
+  // is listed under several ephemerides (e.g. Puck in URA182 and URA184).
+  const rows = new Map<number, TableRow>();
+  for (const cells of parseHtmlTables(elementsHtml)[0].slice(1)) {
+    const [, parent, rawName, code, , frame, epoch, , , , , , , P, , , ra, dec] = cells;
+    const naifId = Number(code);
+    const planetId = PLANET_NAIF_IDS[parent];
+    if (!planetId) throw new Error(`Unknown parent planet ${parent}`);
+
+    let pole: [number, number];
+    if (frame === "ecliptic") {
+      pole = ECLIPTIC_POLE;
+    } else if (frame === "Laplace") {
+      pole = [Number(ra), Number(dec)];
+    } else if (frame === "equatorial") {
+      // The planet's equator, oriented by its spin: the IAU north pole,
+      // flipped for planets rotating retrograde about it (Uranus).
+      const planet = orientation.bodies[planetId];
+      if (!planet?.poleRa || !planet.poleDec || !planet.primeMeridian) throw new Error(`No pole for ${parent}`);
+      const centuries = (EPOCH - 2451545.0) / 36525;
+      const poleRa = planet.poleRa[0] + planet.poleRa[1] * centuries;
+      const poleDec = planet.poleDec[0] + planet.poleDec[1] * centuries;
+      pole = planet.primeMeridian[1] < 0 ? [(poleRa + 180) % 360, -poleDec] : [poleRa, poleDec];
+    } else {
+      throw new Error(`Unknown frame ${frame} for ${rawName}`);
+    }
+
+    const row = { name: displayName(rawName), naifId, parent, pole, period: Number(P), epoch: epochToJulian(epoch) };
+    const existing = rows.get(naifId);
+    if (!existing || row.epoch > existing.epoch) rows.set(naifId, row);
   }
 
-  // Write output
-  fs.writeFileSync(outputPath, JSON.stringify(moons, null, 2));
-  console.log(`\nWrote ${moons.length} moons to ${outputPath}`);
+  // ONLY=Moon,Io,Titan limits the run to a few satellites (for testing; nothing is written).
+  const only = process.env.ONLY?.split(",");
+  const moons: MoonRecord[] = [];
+  const failures: string[] = [];
+  let index = 0;
+  for (const row of rows.values()) {
+    if (only && !only.includes(row.name)) continue;
+    index++;
+    const planetId = PLANET_NAIF_IDS[row.parent];
+    const pck = orientation.bodies[row.naifId];
+    const jplPhysical = physical.get(row.naifId);
+    const moonGm = jplPhysical?.gm ?? pck?.gm ?? null;
+    const mu = ((orientation.bodies[planetId]?.gm ?? 0) + (moonGm ?? 0)) * 86_400 ** 2;
 
-  if (moons.length < MOON_IDS.length) {
-    console.log(`Warning: ${MOON_IDS.length - moons.length} moons failed to fetch.`);
+    // Prefer the longest span that fits well; strongly perturbed irregular
+    // satellites get a shorter span that stays accurate near the present.
+    // Ephemerides that do not cover the default epoch move the epoch inside
+    // their coverage.
+    const fits: MoonFit[] = [];
+    for (const years of SPAN_YEARS) {
+      const halfSpan = years * 365.25;
+      let epoch = EPOCH;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          fits.push(await fitMoon(row, mu, epoch, halfSpan));
+          break;
+        } catch (error) {
+          const limit = error instanceof HorizonsError ? horizonsCoverageLimit(error.text) : null;
+          if (!limit) break;
+          epoch = limit.side === "after" ? Math.floor(limit.jd - halfSpan) - 1.5 : Math.ceil(limit.jd + halfSpan) + 1.5;
+        } finally {
+          await sleep(250);
+        }
+      }
+      const latest = fits[fits.length - 1];
+      if (latest && latest.halfSpan === halfSpan && latest.rmsKm / latest.elements.a <= GOOD_FIT) break;
+    }
+    if (fits.length === 0) {
+      failures.push(row.name);
+      continue;
+    }
+    const chosen = fits.find((fit) => fit.rmsKm / fit.elements.a <= GOOD_FIT)
+      ?? fits.reduce((best, fit) => (fit.rmsKm / fit.elements.a < best.rmsKm / best.elements.a ? fit : best));
+    const { elements, rmsKm, pole, epoch, halfSpan } = chosen;
+
+    let radius: number | null = jplPhysical?.radius ?? null;
+    let radiusSource: string | null = radius !== null ? "JPL sats/phys_par" : null;
+    if (radius === null && pck?.radii) {
+      radius = Math.cbrt(pck.radii[0] * pck.radii[1] * pck.radii[2]);
+      radiusSource = "NAIF pck00011";
+    }
+    if (radius === null) {
+      radius = parseHorizonsRadius(chosen.header);
+      if (radius !== null) radiusSource = "JPL Horizons";
+    }
+
+    const wrapDeg = (radians: number) => ((radians / DEG) % 360 + 360) % 360;
+    moons.push({
+      name: row.name,
+      naifId: row.naifId,
+      parent: row.parent,
+      referencePole: [sig(pole[0], 9), sig(pole[1], 9)],
+      epoch,
+      a: sig(elements.a, 10),
+      e: sig(elements.e, 8),
+      i: sig(elements.i / DEG, 8),
+      node: sig(wrapDeg(elements.node), 10),
+      argPeri: sig(wrapDeg(elements.argPeri), 10),
+      meanAnomaly: sig(wrapDeg(elements.meanAnomaly), 10),
+      meanMotion: sig(elements.meanMotion / DEG, 12),
+      nodeRate: sig(elements.nodeRate / DEG, 8),
+      argPeriRate: sig(elements.argPeriRate / DEG, 8),
+      fitRmsKm: sig(rmsKm, 4),
+      fitSpanDays: halfSpan * 2,
+      radius,
+      gm: moonGm,
+      radiusSource,
+    });
+    const relative = rmsKm / elements.a;
+    console.log(`[${index}/${rows.size}] ${row.name.padEnd(16)} ±${halfSpan / 365.25}y rms ${rmsKm.toFixed(0).padStart(7)} km (${(relative * 100).toFixed(2)}% of a)`);
   }
+
+  if (only) {
+    console.log(JSON.stringify(moons, null, 1));
+    return;
+  }
+  writeJson("src/data/moons.json", {
+    source: [ELEMENTS_URL, PHYSICAL_URL, HORIZONS_URL],
+    generatedAt: new Date().toISOString(),
+    method: "Precessing Keplerian orbits least-squares fitted to Horizons state vectors (±25, ±8 or ±3 years about the epoch; see fitSpanDays), in each satellite's reference plane.",
+    moons,
+  });
+  console.log(`${moons.length} satellites fitted; ${moons.filter((moon) => moon.radius !== null).length} with a published radius`);
+  if (failures.length) console.warn(`No ephemeris fit for: ${failures.join(", ")}`);
 }
 
-main().catch(console.error);
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
