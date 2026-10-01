@@ -29,5 +29,8 @@
   },
   "engines": {
     "node": ">=22.18"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }
