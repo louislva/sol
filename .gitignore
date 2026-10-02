@@ -25,3 +25,6 @@ dist-ssr
 
 # Horizons response cache for the data scripts
 scripts/.cache/
+
+# Scratch files (kept out of the repo and out of agent checkpoints)
+tmp/
