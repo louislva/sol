@@ -19,6 +19,8 @@ import {
   TWO_PI,
   utcJulianToTdb,
 } from "../astro/constants";
+import { KeplerOrbit } from "../astro/kepler";
+import { EQUATORIAL_TO_ECLIPTIC } from "../astro/rotation";
 import { SATELLITE_CATEGORY_COLORS } from "../data/palette";
 
 export type SatelliteCategory = keyof typeof SATELLITE_CATEGORY_COLORS;
@@ -99,6 +101,7 @@ export class SatellitePopulation {
    */
   readonly validFrom: number;
   readonly validTo: number;
+  private readonly orbits = new Map<number, KeplerOrbit>();
   private lastUpdate = Number.NaN;
   private frameCount = 0;
 
@@ -228,6 +231,27 @@ export class SatellitePopulation {
     out[0] = x[0];
     out[1] = y[0];
     out[2] = z[0];
+  }
+
+  /** One satellite's orbit about Earth, J2 drift included, for drawing its path. */
+  orbitOf(index: number): KeplerOrbit {
+    let orbit = this.orbits.get(index);
+    if (!orbit) {
+      orbit = new KeplerOrbit({
+        epoch: this.epoch[index],
+        a: this.semiMajorAxis[index],
+        e: this.eccentricity[index],
+        i: this.inclination[index],
+        node: this.node0[index],
+        argPeri: this.argPeri0[index],
+        meanAnomaly: this.meanAnomaly0[index],
+        meanMotion: this.meanMotion[index],
+        rates: { node: this.nodeRate[index], argPeri: this.argPeriRate[index] },
+        frame: EQUATORIAL_TO_ECLIPTIC,
+      });
+      this.orbits.set(index, orbit);
+    }
+    return orbit;
   }
 
   /** Orbit plane orientation at time t (node and perigee advanced by J2), in the ecliptic. */

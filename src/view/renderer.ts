@@ -177,6 +177,7 @@ export class Renderer {
       const highlight = [state.hovered, state.selected].find((target) => target?.type === "satellite");
       const satellites = world.satellites!;
       profiler.measure("satellite motion", () => satellites.update(world.time, camera.zoom));
+      this.drawSatelliteOrbits(world, camera, state);
       profiler.measure("satellites", () => drawSatellites(
         ctx,
         satellites,
@@ -285,6 +286,30 @@ export class Renderer {
       this.orbits.draw(ctx, world, camera, body, alpha);
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** Orbits of the hovered and selected satellites, under the satellite dots. */
+  private drawSatelliteOrbits(world: World, camera: Camera, state: ViewState): void {
+    const satellites = world.satellites!;
+    const earth = world.earth;
+    const earthRadiusPx = (earth.radius ?? 0) * camera.zoom;
+    this.ctx.lineWidth = ORBIT_LINE_WIDTH;
+    const shown = new Set<number>();
+    for (const target of [state.hovered, state.selected]) {
+      if (target?.type !== "satellite" || shown.has(target.index)) continue;
+      shown.add(target.index);
+      this.orbits.drawSatellite(
+        this.ctx,
+        satellites.orbitOf(target.index),
+        world.time,
+        this.screenX[earth.index],
+        this.screenY[earth.index],
+        earthRadiusPx,
+        camera,
+        satellites.colorOf(target.index),
+        Math.min(1, ORBIT_ALPHA * 2)
+      );
+    }
   }
 
   /** Flown paths of the spacecraft being looked at. */

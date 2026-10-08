@@ -11,7 +11,7 @@
  * orbit's slow secular drift could have moved them by a noticeable amount.
  */
 
-import type { KeplerOrbit } from "../../astro/kepler";
+import { KeplerOrbit } from "../../astro/kepler";
 import { type Body, orbitAt, segmentAt } from "../../model/body";
 import type { World } from "../../model/world";
 import type { Camera } from "../camera";
@@ -26,13 +26,20 @@ const DRIFT_TOLERANCE_PX = 0.25;
 /** Screen coordinates are clamped to this margin so huge paths stay well-conditioned. */
 const SCREEN_MARGIN = 2000;
 
-interface CachedPath {
-  orbit: KeplerOrbit;
+interface SampledPath {
+  /** x, y pairs (km) relative to the focus. */
   points: Float64Array;
   count: number;
-  time: number;
   closed: boolean;
 }
+
+interface CachedPath extends SampledPath {
+  orbit: KeplerOrbit;
+  time: number;
+}
+
+/** Paths are cached per body, or per orbit for objects that are not bodies (satellites). */
+type PathKey = Body | KeplerOrbit;
 
 export interface DrawnOrbit {
   body: Body;
@@ -42,17 +49,26 @@ export interface DrawnOrbit {
 }
 
 export class OrbitLayer {
-  private readonly cache = new Map<Body, CachedPath>();
+  private readonly cache = new Map<PathKey, CachedPath>();
   private readonly localPath = new Float64Array(LOCAL_ARC_POINTS * 2);
   /** Anomaly of each large orbit's point nearest the view, from last frame. */
-  private readonly localAnomaly = new Map<Body, number>();
+  private readonly localAnomaly = new Map<PathKey, number>();
   private readonly screenPool: Float32Array[] = [];
   /** Orbits drawn this frame. */
   readonly drawn: DrawnOrbit[] = [];
   private readonly scratch = new Float64Array(3);
+  /** Satellite orbits drawn this frame; the paths of others are let go. */
+  private readonly satellitesDrawn = new Set<KeplerOrbit>();
 
   beginFrame(): void {
     this.drawn.length = 0;
+    for (const key of this.cache.keys()) {
+      if (key instanceof KeplerOrbit && !this.satellitesDrawn.has(key)) this.cache.delete(key);
+    }
+    for (const key of this.localAnomaly.keys()) {
+      if (key instanceof KeplerOrbit && !this.satellitesDrawn.has(key)) this.localAnomaly.delete(key);
+    }
+    this.satellitesDrawn.clear();
   }
 
   /**
@@ -72,37 +88,81 @@ export class OrbitLayer {
     const focusY = camera.worldToScreenY(eph.positions[parentOffset + 1]);
     const zoom = camera.zoom;
 
-    let points: Float64Array;
-    let count: number;
-    let closed: boolean;
+    const path = orbit.isClosed
+      ? this.closedPath(body, orbit, t, focusX, focusY, camera, segment.parent.kind === "star")
+      : this.openPath(body, orbit, t, world);
+    if (!path) return;
 
-    if (orbit.isClosed) {
-      const radiusPx = orbit.apoapsis * zoom;
-      if (!this.ringMayBeVisible(orbit, t, focusX, focusY, radiusPx, camera)) return;
-      if (radiusPx > LOCAL_SAMPLING_THRESHOLD * Math.hypot(camera.width, camera.height)) {
-        count = this.sampleLocalArc(body, orbit, t, focusX, focusY, camera);
-        if (count === 0) return;
-        points = this.localPath;
-        closed = false;
-      } else {
-        const cached = this.fullPath(body, orbit, t, radiusPx, segment.parent.kind === "star");
-        points = cached.points;
-        count = cached.count;
-        closed = true;
-      }
-    } else {
-      const cached = this.openPath(body, orbit, t, world);
-      points = cached.points;
-      count = cached.count;
-      closed = false;
-    }
-
-    const screen = this.strokePath(ctx, points, count, closed, focusX, focusY, zoom, camera);
+    const screen = this.strokePath(ctx, path.points, path.count, path.closed, focusX, focusY, zoom, camera);
     if (!screen) return;
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = body.color;
     ctx.stroke();
     this.drawn.push({ body, screen: screen.buffer, count: screen.count });
+  }
+
+  /**
+   * Draw an Earth satellite's orbit. Earth's disc hides the part of it behind
+   * Earth, as it hides the satellites there: the half of the orbit below the
+   * ecliptic plane through Earth's center, which projects to one side of the
+   * line of nodes.
+   */
+  drawSatellite(
+    ctx: CanvasRenderingContext2D,
+    orbit: KeplerOrbit,
+    t: number,
+    earthX: number,
+    earthY: number,
+    earthRadiusPx: number,
+    camera: Camera,
+    color: string,
+    alpha: number
+  ): void {
+    this.satellitesDrawn.add(orbit);
+    const path = this.closedPath(orbit, orbit, t, earthX, earthY, camera, false);
+    if (!path) return;
+
+    ctx.save();
+    // Orbit normal h = P × Q; the far half lies toward h_z·(h_x, h_y).
+    const { P, Q } = orbit.shapeAt(t);
+    const hx = P[1] * Q[2] - P[2] * Q[1];
+    const hy = P[2] * Q[0] - P[0] * Q[2];
+    const hz = P[0] * Q[1] - P[1] * Q[0];
+    if (Math.hypot(hx, hy) > 1e-9 && earthRadiusPx > 0) {
+      const back = Math.atan2(hz * hy, hz * hx);
+      const hidden = new Path2D();
+      hidden.rect(0, 0, camera.width, camera.height);
+      const start = back - Math.PI / 2;
+      hidden.moveTo(earthX + earthRadiusPx * Math.cos(start), earthY + earthRadiusPx * Math.sin(start));
+      hidden.arc(earthX, earthY, earthRadiusPx, start, back + Math.PI / 2);
+      hidden.closePath();
+      ctx.clip(hidden, "evenodd");
+    }
+    if (this.strokePath(ctx, path.points, path.count, path.closed, earthX, earthY, camera.zoom, camera)) {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** A closed orbit's path about its focus: the whole ring, or for huge orbits the arc near the view. */
+  private closedPath(
+    key: PathKey,
+    orbit: KeplerOrbit,
+    t: number,
+    focusX: number,
+    focusY: number,
+    camera: Camera,
+    aboutSun: boolean
+  ): SampledPath | null {
+    const radiusPx = orbit.apoapsis * camera.zoom;
+    if (!this.ringMayBeVisible(orbit, t, focusX, focusY, radiusPx, camera)) return null;
+    if (radiusPx > LOCAL_SAMPLING_THRESHOLD * Math.hypot(camera.width, camera.height)) {
+      const count = this.sampleLocalArc(key, orbit, t, focusX, focusY, camera);
+      return count === 0 ? null : { points: this.localPath, count, closed: false };
+    }
+    return this.fullPath(key, orbit, t, radiusPx, aboutSun);
   }
 
   /** Cheap rejection: can any part of the orbit's projected ring touch the viewport? */
@@ -128,14 +188,14 @@ export class OrbitLayer {
     return Math.hypot(farthestX, farthestY) >= innerPx;
   }
 
-  private fullPath(body: Body, orbit: KeplerOrbit, t: number, radiusPx: number, aboutSun: boolean): CachedPath {
+  private fullPath(key: PathKey, orbit: KeplerOrbit, t: number, radiusPx: number, aboutSun: boolean): CachedPath {
     const wanted = Math.min(
       MAX_FULL_POINTS,
       Math.max(MIN_POINTS, Math.ceil(Math.PI * Math.sqrt(radiusPx / (2 * CHORD_TOLERANCE_PX))))
     );
     // Round up to a power of two so small zoom changes reuse the cache.
     const count = Math.min(MAX_FULL_POINTS, 2 ** Math.ceil(Math.log2(wanted)));
-    const cached = this.cache.get(body);
+    const cached = this.cache.get(key);
     const drift = orbit.geometryDriftPerDay * Math.abs(t - (cached?.time ?? t)) * radiusPx;
     if (cached && cached.orbit === orbit && cached.closed && cached.count === count && drift < DRIFT_TOLERANCE_PX) {
       return cached;
@@ -144,7 +204,7 @@ export class OrbitLayer {
     const points = cached && cached.points.length >= count * 2 ? cached.points : new Float64Array(count * 2);
     orbit.samplePath(t, count, points, -Math.PI, Math.PI, aboutSun);
     const entry = { orbit, points, count, time: t, closed: true };
-    this.cache.set(body, entry);
+    this.cache.set(key, entry);
     return entry;
   }
 
@@ -189,7 +249,7 @@ export class OrbitLayer {
    * little between frames, so it is refined from last frame's value and only
    * searched for from scratch when that fails.
    */
-  private sampleLocalArc(body: Body, orbit: KeplerOrbit, t: number, focusX: number, focusY: number, camera: Camera): number {
+  private sampleLocalArc(key: PathKey, orbit: KeplerOrbit, t: number, focusX: number, focusY: number, camera: Camera): number {
     const { a, e, b, P, Q } = orbit.shapeAt(t);
     const zoom = camera.zoom;
     // View center relative to the focus, in km.
@@ -211,7 +271,7 @@ export class OrbitLayer {
     };
 
     const viewRadiusKm = camera.viewRadius;
-    const previous = this.localAnomaly.get(body);
+    const previous = this.localAnomaly.get(key);
     let center = previous === undefined ? Number.NaN : refine(previous - 0.05, previous + 0.05);
     if (!(distanceSquared(center) <= (2 * viewRadiusKm) ** 2)) {
       const coarse = 96;
@@ -227,7 +287,7 @@ export class OrbitLayer {
       }
       center = refine(best - (Math.PI * 2) / coarse, best + (Math.PI * 2) / coarse);
     }
-    this.localAnomaly.set(body, center);
+    this.localAnomaly.set(key, center);
     if (distanceSquared(center) > (2 * viewRadiusKm) ** 2) return 0;
 
     // Arc length per unit anomaly is at least the semi-minor axis times the
