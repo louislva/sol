@@ -79,7 +79,8 @@ async function main(): Promise<void> {
   const directory = mkdtempSync(path.join(tmpdir(), "reid2019-"));
   const archive = path.join(directory, "source.tar.gz");
   writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
-  execFileSync("tar", ["xzf", archive, "-C", directory]);
+  // Pass tar a relative name: Git for Windows' GNU tar reads "C:\..." as host:path.
+  execFileSync("tar", ["xzf", path.basename(archive)], { cwd: directory });
   const tex = readFileSync(path.join(directory, "Reid_arXiv.tex"), "utf8");
 
   const arms = table(tex, "Spiral Arm Characteristics").map((cells) => {
