@@ -76,7 +76,8 @@ src/
 │   ├── picking.ts            # Hit testing against what was drawn
 │   ├── galaxy/               # Synthetic Milky Way (for show) and its WebGL renderer
 │   └── layers/               # stars, galactic center, orbits, rings, labels, icons, populations, scale bar
-├── ui/                       # Controls, info sidebar, console API, Wikipedia
+├── ui/                       # Controls, info sidebar, About panel, console API, Wikipedia
+├── seo/                      # Pages for search engines: titles, descriptions, About text
 └── data/                     # Generated JSON (+ palette.ts); see scripts/README.md
 scripts/                      # Data fetchers (Node ≥ 22.18 runs .ts directly)
 public/data/                  # Large datasets loaded at runtime (asteroids, satellites, stars, missions)
@@ -170,6 +171,16 @@ whole orbit is inside the parent's disc are not even propagated.
 - Satellites appear once Earth's satellite system spans a few pixels.
 - Moons: all are drawn; only major and medium moons (radius > 10 km) always draw their orbits, the rest only when hovered or selected.
 - Labels: placed by priority, never overlapping.
+
+### Search pages
+`src/seo/pages.ts` lists the home page and a landing page per popular object
+(`/voyager-1`, `/mars`, `/milky-way`, …). They are all the same app: at build
+time `vite.config.ts` fills index.html's `<!--seo:…-->` placeholders and writes
+`<slug>.html` per page with its own title, description, structured data and
+About-panel text, plus `sitemap.xml`; Vercel serves them at `/<slug>`
+(`cleanUrls` in `vercel.json`). A landing page opens at real-time speed on its
+object (`App.present`). The About panel's text is what search engines read, so
+keep it accurate and readable. To add a page, add an entry to `LANDING_PAGES`.
 
 ## Browser Debugging
 

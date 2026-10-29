@@ -15,6 +15,7 @@ import type { EphemerisFile, EphemerisSeries, MissionFile } from "./model/catalo
 import { SatellitePopulation } from "./model/satellitePopulation";
 import { StarPopulation } from "./model/starPopulation";
 import { sameTarget, type Target, World } from "./model/world";
+import type { Framing } from "./seo/pages";
 import { Controls } from "./ui/controls";
 import { Sidebar } from "./ui/sidebar";
 import { Camera } from "./view/camera";
@@ -419,6 +420,45 @@ export class App {
       this.scratch[0] - this.camera.originX,
       this.scratch[1] - this.camera.originY,
       Math.min(this.camera.width, this.camera.height) / 2 / this.viewRadiusFor(target)
+    );
+  }
+
+  /**
+   * Open on a target (a landing page's object) at real-time speed: select it
+   * (not on phones) and frame it.
+   * "withSun" fits the target and the Sun together; "aroundSun" centers the
+   * target with the Sun at the edge of the view; "close" is `goto`.
+   */
+  async present(target: Target, framing: Framing): Promise<void> {
+    if (target.type === "body" && target.body.mission?.trajectoryFile) await this.loadTrajectory(target.body);
+    // The page promises where it is right now: don't let auto speed race off
+    // to another year at this zoom. Play, fast-forward or Auto speed up.
+    this.setSpeed("realtime");
+    // On a phone the sidebar would cover most of the map; a tap opens it.
+    const phone = this.camera.width <= 600;
+    if (!phone) this.select(target);
+    if (framing === "close" || !this.world.exists(target)) {
+      this.goto(target);
+      return;
+    }
+    const at = [0, 0, 0];
+    this.world.position(target, at);
+    this.world.position({ type: "body", body: this.world.sun }, this.scratch);
+    const distance = Math.hypot(at[0] - this.scratch[0], at[1] - this.scratch[1]);
+    // Keep clear of the sidebar and the controls.
+    const right = phone ? 0 : 300;
+    const bottom = phone ? 190 : 200;
+    const width = Math.max(1, this.camera.width - right);
+    const height = Math.max(1, this.camera.height - bottom);
+    const [centerX, centerY, radius] = framing === "withSun"
+      ? [(at[0] + this.scratch[0]) / 2, (at[1] + this.scratch[1]) / 2, distance / 2]
+      : [at[0], at[1], distance];
+    const zoom = Math.min(width, height) / 2 / (1.25 * Math.max(radius, this.viewRadiusFor(target)));
+    // Shift so the framed region sits in the middle of the free area.
+    this.camera.setView(
+      centerX - this.camera.originX + right / 2 / zoom,
+      centerY - this.camera.originY + bottom / 2 / zoom,
+      zoom
     );
   }
 
